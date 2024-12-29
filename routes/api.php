@@ -37,13 +37,4 @@ Route::middleware('auth:sanctum')->get('/service-history/{vehicleId}', [ServiceR
 
 Route::middleware('auth:sanctum')->post('/add-service-history/store/{vehicleId}', [ServiceRecordController::class, 'store']);
 
-
-
-
-
-
-
-
-
-
-
+Route::middleware('auth:sanctum')->delete('/service-history/{id}', [ServiceRecordController::class, 'destroy']);
