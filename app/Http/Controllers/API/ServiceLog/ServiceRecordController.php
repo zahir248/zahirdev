@@ -99,4 +99,55 @@ class ServiceRecordController extends Controller
             'message' => 'Service record deleted successfully.'
         ], 200);
     }
+
+    public function update(Request $request, $id)
+    {
+        // Check if the user is authenticated
+        if (auth()->guest()) {
+            return response()->json([
+                'message' => 'Unauthorized. Please log in first.',
+            ], 401);
+        }
+
+        // Validate the incoming request data
+        $validated = $request->validate([
+            'service_date' => 'nullable|date',
+            'service_place' => 'nullable|string|max:255',
+            'service_cost' => 'nullable|numeric|min:0',
+            'description' => 'nullable|string',
+            'vehicle_id' => 'required|integer|exists:vehicles,id', // Ensure vehicle_id is valid
+        ]);
+
+        // Get the authenticated user's ID
+        $userId = auth()->user()->id;
+
+        // Find the service record by ID and ensure it belongs to the specified vehicle and the authenticated user
+        $serviceRecord = ServiceRecord::where('id', $id)
+            ->where('vehicle_id', $validated['vehicle_id'])
+            ->whereHas('vehicle', function ($query) use ($userId) {
+                $query->where('user_id', $userId);
+            })
+            ->first();
+
+        if (!$serviceRecord) {
+            return response()->json([
+                'message' => 'Service record not found or unauthorized.',
+            ], 404);
+        }
+
+        // Update the service record with the validated data
+        $serviceRecord->update([
+            'service_date' => $validated['service_date'] ?? $serviceRecord->service_date,
+            'service_place' => $validated['service_place'] ?? $serviceRecord->service_place,
+            'service_cost' => $validated['service_cost'] ?? $serviceRecord->service_cost,
+            'description' => $validated['description'] ?? $serviceRecord->description,
+        ]);
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'Service record updated successfully.',
+            'serviceRecord' => $serviceRecord,
+        ]);
+    }
+    
 }
