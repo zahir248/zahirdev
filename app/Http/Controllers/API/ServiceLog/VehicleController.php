@@ -20,6 +20,7 @@ class VehicleController extends Controller
         return response()->json([
             'status' => 200,
             'vehicles' => $vehicles,
+            'user_name' => $user->name, 
         ]);
     }
 
