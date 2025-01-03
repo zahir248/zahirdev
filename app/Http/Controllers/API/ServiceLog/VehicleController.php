@@ -13,14 +13,34 @@ class VehicleController extends Controller
 {
     public function index()
     {
-        // Retrieve vehicles only for the authenticated user
-        $user = Auth::user(); // Get the authenticated user
-        $vehicles = Vehicle::where('user_id', $user->id)->get(); // Filter vehicles by user ID
+        // Retrieve the authenticated user
+        $user = Auth::user();
+
+        // Ensure the vehicles are retrieved with service records
+        $vehicles = Vehicle::where('user_id', $user->id)
+            ->with(['serviceRecords' => function ($query) {
+                // Select necessary fields from ServiceRecord
+                $query->select('id', 'vehicle_id', 'service_cost');
+            }])
+            ->get()
+            ->map(function ($vehicle) {
+                // Calculate the total service cost for each vehicle
+                $vehicle->total_service_cost = $vehicle->serviceRecords->sum('service_cost');
+                return $vehicle;
+            });
+
+        // Check if vehicles are found
+        if ($vehicles->isEmpty()) {
+            return response()->json([
+                'status' => 404,
+                'message' => 'No vehicles found for this user.',
+            ]);
+        }
 
         return response()->json([
             'status' => 200,
             'vehicles' => $vehicles,
-            'user_name' => $user->name, 
+            'user_name' => $user->name,
         ]);
     }
 

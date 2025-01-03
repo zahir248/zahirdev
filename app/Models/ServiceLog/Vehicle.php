@@ -25,4 +25,9 @@ class Vehicle extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function serviceRecords()
+    {
+        return $this->hasMany(\App\Models\ServiceLog\ServiceRecord::class, 'vehicle_id');
+    }
 }
