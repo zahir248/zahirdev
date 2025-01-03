@@ -31,6 +31,8 @@ Route::middleware('auth:sanctum')->get('/vehicle/{id}', [VehicleController::clas
 
 Route::middleware('auth:sanctum')->put('/vehicle/{id}', [VehicleController::class, 'update']);
 
+Route::middleware('auth:sanctum')->get('/vehicle/{id}/export-pdf', [VehicleController::class, 'exportPDF']);
+
 // Service Record //
 
 Route::middleware('auth:sanctum')->get('/service-history/{vehicleId}', [ServiceRecordController::class, 'index']);

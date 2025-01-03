@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\ServiceLog;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
+use PDF;
 use Illuminate\Support\Facades\Validator;
 
 use App\Models\ServiceLog\Vehicle;
@@ -18,10 +19,12 @@ class VehicleController extends Controller
 
         // Ensure the vehicles are retrieved with service records
         $vehicles = Vehicle::where('user_id', $user->id)
-            ->with(['serviceRecords' => function ($query) {
-                // Select necessary fields from ServiceRecord
-                $query->select('id', 'vehicle_id', 'service_cost');
-            }])
+            ->with([
+                'serviceRecords' => function ($query) {
+                    // Select necessary fields from ServiceRecord
+                    $query->select('id', 'vehicle_id', 'service_cost');
+                }
+            ])
             ->get()
             ->map(function ($vehicle) {
                 // Calculate the total service cost for each vehicle
@@ -178,5 +181,36 @@ class VehicleController extends Controller
             'vehicle' => $vehicle,
         ]);
     }
-    
+
+    public function exportPDF($id)
+    {
+        try {
+            // Get vehicle with its service history
+            $vehicle = Vehicle::with([
+                'serviceRecords' => function ($query) {
+                    $query->orderBy('service_date', 'desc');
+                }
+            ])->findOrFail($id);
+
+            // Calculate total cost from service records
+            $totalCost = $vehicle->serviceRecords->sum('service_cost');
+
+            // Generate PDF
+            $pdf = PDF::loadView('ServiceLog.pdf.vehicle-service-history', [
+                'vehicle' => $vehicle,
+                'serviceRecords' => $vehicle->serviceRecords,
+                'totalCost' => $totalCost  // Pass the calculated total instead of vehicle->total_service_cost
+            ]);
+
+            // Return PDF for download
+            return $pdf->download($vehicle->model . '_' . $vehicle->registration_number . '_report.pdf');
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to generate PDF',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
 }
