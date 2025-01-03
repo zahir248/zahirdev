@@ -67,7 +67,7 @@
                 <tr>
                     <th>No.</th>
                     <th>Date</th>
-                    <th>Service Place</th>
+                    <th>Place</th>
                     <th>Description</th>
                     <th>Cost (RM)</th>
                 </tr>
