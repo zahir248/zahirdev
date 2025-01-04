@@ -18,6 +18,7 @@ class ServiceRecordController extends Controller
             // Eager load the associated Vehicle model
             $serviceRecords = ServiceRecord::with('vehicle')  // Load vehicle data for each service record
                 ->where('vehicle_id', $vehicleId)
+                ->orderBy('service_date', 'desc')  // Sort by service_date in descending order
                 ->get();
 
             if ($serviceRecords->isEmpty()) {

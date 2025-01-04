@@ -27,8 +27,9 @@ class VehicleController extends Controller
             ])
             ->get()
             ->map(function ($vehicle) {
-                // Calculate the total service cost for each vehicle
+                // Calculate the total service cost and total number of service records for each vehicle
                 $vehicle->total_service_cost = $vehicle->serviceRecords->sum('service_cost');
+                $vehicle->total_service_records = $vehicle->serviceRecords->count();
                 return $vehicle;
             });
 
