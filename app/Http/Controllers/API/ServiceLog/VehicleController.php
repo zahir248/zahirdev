@@ -33,19 +33,21 @@ class VehicleController extends Controller
                 return $vehicle;
             });
 
-        // Check if vehicles are found
+        // Prepare the response data
+        $responseData = [
+            'status' => 200,
+            'user_name' => $user->name,
+            'user_email' => $user->email,
+            'vehicles' => $vehicles,
+        ];
+
+        // If no vehicles are found, still return the user data
         if ($vehicles->isEmpty()) {
-            return response()->json([
-                'status' => 404,
-                'message' => 'No vehicles found for this user.',
-            ]);
+            $responseData['message'] = 'No vehicles found for this user.';
+            // You can return the status 200 even when no vehicles are found to show user data
         }
 
-        return response()->json([
-            'status' => 200,
-            'vehicles' => $vehicles,
-            'user_name' => $user->name,
-        ]);
+        return response()->json($responseData);
     }
 
     public function store(Request $request)

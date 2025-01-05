@@ -63,4 +63,37 @@ class AuthController extends Controller
             ], 401);
         }
     }
+
+    public function update(Request $request)
+    {
+        // Retrieve the authenticated user
+        $user = Auth::user();
+
+        // Validate the input data
+        $validatedData = $request->validate([
+            'name' => 'nullable|string|max:255',
+            'email' => 'nullable|email|max:255|unique:users,email,' . $user->id, // Ensure the email is unique, but allow the current user's email
+        ]);
+
+        // Update the user data
+        try {
+            $user->name = $validatedData['name'];
+            $user->email = $validatedData['email'];
+            
+            // Save the updated user data
+            $user->save();
+
+            return response()->json([
+                'status' => 200,
+                'message' => 'Profile updated successfully!',
+                'user' => $user, // Return the updated user object
+            ]);
+        } catch (\Exception $e) {
+            // Handle errors (e.g., if the database save fails)
+            return response()->json([
+                'status' => 500,
+                'message' => 'Failed to update profile. Please try again later.',
+            ], 500);
+        }
+    }
 }
