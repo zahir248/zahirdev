@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -66,34 +67,91 @@ class AuthController extends Controller
 
     public function update(Request $request)
     {
-        // Retrieve the authenticated user
-        $user = Auth::user();
-
-        // Validate the input data
-        $validatedData = $request->validate([
-            'name' => 'nullable|string|max:255',
-            'email' => 'nullable|email|max:255|unique:users,email,' . $user->id, // Ensure the email is unique, but allow the current user's email
-        ]);
-
-        // Update the user data
         try {
+            // Retrieve the authenticated user
+            $user = Auth::user();
+
+            // Debug line: Log the request data
+            \Log::info('Data received from frontend:', $request->all());
+
+            // Build basic validation rules
+            $rules = [
+                'name' => 'nullable|string|max:255',  // Changed to required since frontend always sends it
+                'email' => 'nullable|email|max:255|unique:users,email,' . $user->id,
+            ];
+
+            // Add password validation rules only if password is provided
+            if ($request->has('password')) {
+                $rules['password'] = [
+                    'required',
+                    'string',
+                    'min:4',
+                    'confirmed'
+                ];
+            }
+
+            // Validate the input data
+            $validatedData = $request->validate($rules);
+
+            // Debug line: Log the validated data
+            \Log::info('Validated data:', $validatedData);
+
+            // Update user data
             $user->name = $validatedData['name'];
             $user->email = $validatedData['email'];
-            
+
+            // Update password if provided
+            if ($request->filled('password')) {
+                $user->password = Hash::make($validatedData['password']);
+
+                // Debug line: Log password update (correctly formatted)
+                \Log::info('Password updated for user', ['user_id' => $user->id]);
+            }
+
+            // Debug line: Log user data before save
+            \Log::info('User data before save:', [
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'password_changed' => $request->has('password')
+            ]);
+
             // Save the updated user data
             $user->save();
 
             return response()->json([
                 'status' => 200,
                 'message' => 'Profile updated successfully!',
-                'user' => $user, // Return the updated user object
+                'user' => [
+                    'name' => $user->name,
+                    'email' => $user->email
+                ],
             ]);
+
+        } catch (ValidationException $e) {
+            \Log::error('Validation errors:', [
+                'errors' => $e->errors(),
+                'request_data' => $request->except(['password', 'password_confirmation'])
+            ]);
+
+            return response()->json([
+                'status' => 422,
+                'message' => 'The given data was invalid.',
+                'errors' => $e->errors()
+            ], 422);
+
         } catch (\Exception $e) {
-            // Handle errors (e.g., if the database save fails)
+            \Log::error('Exception during profile update:', [
+                'message' => $e->getMessage(),
+                'user_id' => $user->id ?? null,
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'status' => 500,
                 'message' => 'Failed to update profile. Please try again later.',
             ], 500);
         }
     }
+
 }
