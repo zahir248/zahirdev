@@ -48,7 +48,7 @@ class ServiceRecordController extends Controller
         $validator = Validator::make($request->all(), [
             'service_date' => 'nullable|date', // Nullable field
             'service_place' => 'nullable|string|max:255', // Nullable field
-            'service_cost' => 'nullable|numeric', // Nullable field
+            'service_cost' => 'nullable|numeric|min:0',
             'description' => 'nullable|string|max:1000', // Nullable field
         ]);
 
@@ -113,9 +113,9 @@ class ServiceRecordController extends Controller
         // Validate the incoming request data
         $validated = $request->validate([
             'service_date' => 'nullable|date',
-            'service_place' => 'nullable|string|max:255',
+            'service_place' => 'nullable|string|max:255', // Nullable field
             'service_cost' => 'nullable|numeric|min:0',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:1000', // Nullable field
             'vehicle_id' => 'required|integer|exists:vehicles,id', // Ensure vehicle_id is valid
         ]);
 
@@ -150,5 +150,5 @@ class ServiceRecordController extends Controller
             'serviceRecord' => $serviceRecord,
         ]);
     }
-    
+
 }

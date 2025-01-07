@@ -85,7 +85,7 @@ class AuthController extends Controller
                 $rules['password'] = [
                     'required',
                     'string',
-                    'min:4',
+                    'min:6',
                     'confirmed'
                 ];
             }
