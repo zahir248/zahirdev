@@ -5,6 +5,8 @@ namespace App\Models\ReceiptLog;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+use App\Models\User;
+
 class Receipt extends Model
 {
     use HasFactory;
