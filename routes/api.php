@@ -55,5 +55,11 @@ Route::middleware('auth:sanctum')->put('/service-history/{id}', [ServiceRecordCo
 
 Route::get('/receipts/{userId}', [ReceiptController::class, 'getReceipts']);
 
+Route::put('/receipts/{id}', [ReceiptController::class, 'update']);
+
+Route::delete('/receipts/{id}', [ReceiptController::class, 'destroy']);
+
+
+
 
 

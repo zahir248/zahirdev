@@ -40,4 +40,35 @@ class ReceiptController extends Controller
             ], 500);
         }
     }
+
+    public function update(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'store_name' => 'nullable|string|max:255',
+            'total_amount' => 'nullable|numeric',
+            'date' => 'nullable|date',
+        ]);
+
+        $receipt = Receipt::findOrFail($id);
+        $receipt->update($validated);
+
+        return response()->json(['message' => 'Receipt updated successfully', 'receipt' => $receipt], 200);
+    }
+
+    public function destroy($id)
+    {
+        // Find the receipt by its ID
+        $receipt = Receipt::find($id);
+
+        // Check if the receipt exists
+        if (!$receipt) {
+            return response()->json(['message' => 'Receipt not found'], 404);
+        }
+
+        // Delete the receipt
+        $receipt->delete();
+
+        // Return a success response
+        return response()->json(['message' => 'Receipt deleted successfully']);
+    }
 }
