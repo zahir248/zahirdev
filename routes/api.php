@@ -64,6 +64,12 @@ Route::delete('/receipts/{id}', [ReceiptController::class, 'destroy']);
 
 Route::get('/receipt-items/{id}', [ReceiptItemController::class, 'getItems']);
 
+Route::put('/receipts/{receiptId}/items/{itemId}', [ReceiptItemController::class, 'update']);
+
+Route::delete('/receipts/{receiptId}/items/{itemId}', [ReceiptItemController::class, 'destroy']);
+
+
+
 
 
 
