@@ -10,6 +10,7 @@ use App\Http\Controllers\API\ServiceLog\ServiceRecordController;
 
 use App\Http\Controllers\API\ReceiptLog\ReceiptController;
 use App\Http\Controllers\API\ReceiptLog\ReceiptItemController;
+use App\Http\Controllers\API\ReceiptLog\UserController;
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
@@ -68,9 +69,6 @@ Route::put('/receipts/{receiptId}/items/{itemId}', [ReceiptItemController::class
 
 Route::delete('/receipts/{receiptId}/items/{itemId}', [ReceiptItemController::class, 'destroy']);
 
+// User // 
 
-
-
-
-
-
+Route::post('/update-profile', [UserController::class, 'updateProfile']);
