@@ -71,4 +71,26 @@ class ReceiptController extends Controller
         // Return a success response
         return response()->json(['message' => 'Receipt deleted successfully']);
     }
+
+    public function store(Request $request)
+    {
+        $validatedData = $request->validate([
+            'store_name' => 'required|string|max:255',
+            'date' => 'required|date',
+            'userId' => 'required|exists:users,id', // Make sure the user_id exists in the users table
+        ]);
+
+        // Map the 'userId' field from the request to 'user_id' in the validated data
+        $validatedData['user_id'] = $validatedData['userId'];  // Map 'userId' to 'user_id'
+        unset($validatedData['userId']);  // Remove the old 'userId' field
+
+        // Set total_amount to 0
+        $validatedData['total_amount'] = 0;
+
+        // Create the receipt with the provided user_id and total_amount
+        $receipt = Receipt::create($validatedData);
+
+        return response()->json(['message' => 'Receipt added successfully', 'receipt' => $receipt], 201);
+    }
+
 }

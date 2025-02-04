@@ -5,9 +5,11 @@ namespace App\Http\Controllers\API\ReceiptLog;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 use App\Models\User;
 use App\Models\ReceiptLog\ReceiptItem;
+use App\Models\ReceiptLog\Receipt;
 
 class ReceiptItemController extends Controller
 {
@@ -86,6 +88,53 @@ class ReceiptItemController extends Controller
 
         // Return a success response
         return response()->json(['message' => 'Item deleted successfully']);
+    }
+
+    public function store(Request $request, $receiptId)
+    {
+        // Validate the incoming request
+        $validatedData = $request->validate([
+            'item_name' => 'string|max:255',
+            'quantity' => 'integer|min:1',
+            'price' => 'numeric|min:0'
+        ]);
+
+        DB::beginTransaction();
+        try {
+            // Verify that the receipt exists
+            $receipt = Receipt::findOrFail($receiptId);
+
+            // Calculate item total
+            $itemTotal = $validatedData['quantity'] * $validatedData['price'];
+
+            // Create the receipt item
+            $receiptItem = ReceiptItem::create([
+                'receipt_id' => $receiptId,
+                'item_name' => $validatedData['item_name'],
+                'quantity' => $validatedData['quantity'],
+                'price' => $validatedData['price']
+            ]);
+
+            // Update the receipt's total amount
+            $receipt->total_amount += $itemTotal;
+            $receipt->save();
+
+            DB::commit();
+
+            // Return the created item with a 201 status code
+            return response()->json([
+                'item' => $receiptItem,
+                'updated_receipt_total' => $receipt->total_amount
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            // Handle any errors
+            return response()->json([
+                'message' => 'Error creating receipt item',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
 }

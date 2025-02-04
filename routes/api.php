@@ -61,6 +61,8 @@ Route::put('/receipts/{id}', [ReceiptController::class, 'update']);
 
 Route::delete('/receipts/{id}', [ReceiptController::class, 'destroy']);
 
+Route::post('/receipts', [ReceiptController::class, 'store']);
+
 // Receipt Item // 
 
 Route::get('/receipt-items/{id}', [ReceiptItemController::class, 'getItems']);
@@ -68,6 +70,8 @@ Route::get('/receipt-items/{id}', [ReceiptItemController::class, 'getItems']);
 Route::put('/receipts/{receiptId}/items/{itemId}', [ReceiptItemController::class, 'update']);
 
 Route::delete('/receipts/{receiptId}/items/{itemId}', [ReceiptItemController::class, 'destroy']);
+
+Route::post('/receipts/{receiptId}/items', [ReceiptItemController::class, 'store']);
 
 // User // 
 
