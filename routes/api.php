@@ -63,6 +63,8 @@ Route::delete('/receipts/{id}', [ReceiptController::class, 'destroy']);
 
 Route::post('/receipts', [ReceiptController::class, 'store']);
 
+Route::get('/reports', [ReceiptController::class, 'getReports']);
+
 // Receipt Item // 
 
 Route::get('/receipt-items/{id}', [ReceiptItemController::class, 'getItems']);
