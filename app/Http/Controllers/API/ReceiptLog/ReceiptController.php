@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 use App\Models\User;
 use App\Models\ReceiptLog\Receipt;
+use App\Models\ReceiptLog\ReceiptItem;
 
 class ReceiptController extends Controller
 {
@@ -146,6 +147,57 @@ class ReceiptController extends Controller
         $formattedReports = array_values($formattedReports);
 
         return response()->json($formattedReports);
+    }
+
+    public function storeAuto(Request $request)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Validate the request
+            $validated = $request->validate([
+                'user_id' => 'required|integer',
+                'store_name' => 'required|string',
+                'total_amount' => 'required|numeric',
+                'date' => 'required|date',
+                'items' => 'required|array',
+                'items.*.item_name' => 'required|string',
+                'items.*.quantity' => 'required|integer',
+                'items.*.price' => 'required|numeric',
+            ]);
+
+            // Create receipt
+            $receipt = Receipt::create([
+                'user_id' => $validated['user_id'],
+                'store_name' => $validated['store_name'],
+                'total_amount' => $validated['total_amount'],
+                'date' => $validated['date'],
+            ]);
+
+            // Create receipt items
+            foreach ($validated['items'] as $item) {
+                ReceiptItem::create([
+                    'receipt_id' => $receipt->id,
+                    'item_name' => $item['item_name'],
+                    'quantity' => $item['quantity'],
+                    'price' => $item['price'],
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Receipt saved successfully',
+                'receipt_id' => $receipt->id
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                'message' => 'Error saving receipt',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
 }
