@@ -69,7 +69,7 @@ Route::post('/receipts/auto', [ReceiptController::class, 'storeAuto']);
 
 // Receipt Item // 
 
-Route::get('/receipt-items/{id}', [ReceiptItemController::class, 'getItems']);
+Route::get('/receipts/receipt-items/{id}', [ReceiptItemController::class, 'getItems']);
 
 Route::put('/receipts/{receiptId}/items/{itemId}', [ReceiptItemController::class, 'update']);
 
