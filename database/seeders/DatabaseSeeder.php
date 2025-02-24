@@ -17,6 +17,8 @@ class DatabaseSeeder extends Seeder
             UsersTableSeeder::class,
             VehiclesTableSeeder::class,
             ServiceRecordsTableSeeder::class,
+            ReceiptsTableSeeder::class,      
+            ReceiptItemsTableSeeder::class,  
         ]);
     }
 }
