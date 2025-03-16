@@ -124,3 +124,18 @@ Route::get('/debug-storage', function () {
     ]);
 });
 
+Route::get('/debug-yt-dlp-run', function () {
+    $ytDlpPath = base_path('bin/yt-dlp.exe');
+
+    // Run yt-dlp with --version to test execution
+    $command = "\"{$ytDlpPath}\" --version";
+    $output = shell_exec($command . " 2>&1"); // Capture error messages
+
+    return response()->json([
+        'path' => $ytDlpPath,
+        'command' => $command,
+        'output' => $output ?? 'No output (Possible execution error)',
+    ]);
+});
+
+
