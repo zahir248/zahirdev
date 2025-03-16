@@ -17,14 +17,36 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = storage_path('yt-dlp/yt-dlp_linux');
-        $outputDir = storage_path('app/public/downloads'); // Store in storage directory
-        $videoUrl = $request->input('url');
+        $ytDlpPath = base_path('yt-dlp_linux'); // Get bin path dynamically
+$outputDir = storage_path('app/public/downloads'); // Store in storage directory
+$videoUrl = $request->input('url');
 
-        // Ensure the output directory exists
-        if (!file_exists($outputDir)) {
-            mkdir($outputDir, 0755, true);
-        }
+// Ensure the yt-dlp binary exists
+if (!file_exists($ytDlpPath)) {
+    throw new Exception("yt-dlp binary not found at $ytDlpPath");
+}
+
+// Check if the yt-dlp binary is executable
+if (is_file($ytDlpPath) && !is_executable($ytDlpPath)) {
+    // If not executable, set the permissions to allow execution
+    chmod($ytDlpPath, 0755); // rwxr-xr-x (read, write, and execute for owner, read and execute for others)
+}
+
+// Ensure the output directory exists
+if (!file_exists($outputDir)) {
+    mkdir($outputDir, 0755, true); // Create the directory if it doesn't exist
+}
+
+// Ensure the output directory has write permissions
+if (!is_writable($outputDir)) {
+    chmod($outputDir, 0775); // Set write permissions for the directory
+}
+
+// You can also add extra checks for the ownership if needed
+if (fileowner($outputDir) !== posix_geteuid()) {
+    chown($outputDir, posix_geteuid()); // Set the owner to the current user (optional)
+}
+
 
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
