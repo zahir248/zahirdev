@@ -15,14 +15,19 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = base_path('app/bin/yt-dlp_linux'); // Get binary path dynamically
+        $ytDlpPath = base_path('bin/yt-dlp_linux'); // Get binary path dynamically
         $outputDir = storage_path('app/public/downloads'); // Store in storage directory
         $videoUrl = $request->input('url');
 
-        // Ensure yt-dlp has execute permissions
-        if (!is_executable($ytDlpPath)) {
+        // Ensure yt-dlp exists before setting permissions
+        if (is_file($ytDlpPath) && !is_executable($ytDlpPath)) {
             Log::info('Setting execute permissions for yt-dlp');
-            shell_exec("chmod +x " . escapeshellarg($ytDlpPath));
+            
+            // Try using chmod() directly for better security
+            if (!@chmod($ytDlpPath, 0755)) {
+                // Fallback to shell_exec if chmod() fails
+                shell_exec("chmod +x " . escapeshellarg($ytDlpPath));
+            }
         }
 
         // Ensure the output directory exists
