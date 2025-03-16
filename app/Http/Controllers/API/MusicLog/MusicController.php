@@ -21,17 +21,14 @@ class MusicController extends Controller
         $outputDir = storage_path('app/public/downloads');
         $videoUrl = $request->input('url');
 
-        // Collect environment information
+        // Debug current state
         $debugInfo = [
             'pwd' => shell_exec('pwd'),
             'ls_bin' => shell_exec('ls -la ' . base_path('bin')),
             'current_user' => shell_exec('id'),
-            'file_exists' => file_exists($ytDlpPath),
-            'ytdlp_path' => $ytDlpPath,
-            'output_dir' => $outputDir
+            'file_exists' => file_exists($ytDlpPath)
         ];
 
-        // Check if file exists and try to fix permissions
         if (!file_exists($ytDlpPath)) {
             return response()->json([
                 'success' => false,
@@ -41,64 +38,48 @@ class MusicController extends Controller
         }
 
         try {
-            // Get initial state
-            $initialPerms = substr(sprintf('%o', fileperms($ytDlpPath)), -4);
-            
-            // Try multiple chmod approaches
-            chmod($ytDlpPath, 0755);
-            $shellChmod = shell_exec("chmod 755 {$ytDlpPath} 2>&1");
-            $bashChmod = shell_exec("bash -c 'chmod 755 {$ytDlpPath}' 2>&1");
+            // Try to set permissions using Process
+            $chmodProcess = new Process(['chmod', '755', $ytDlpPath]);
+            $chmodProcess->run();
 
-            // Test file after chmod
-            $permissionInfo = [
-                'initial_perms' => $initialPerms,
-                'final_perms' => substr(sprintf('%o', fileperms($ytDlpPath)), -4),
-                'is_executable' => is_executable($ytDlpPath),
-                'chmod_output' => $shellChmod,
-                'bash_chmod_output' => $bashChmod
-            ];
-
-            // Test yt-dlp directly
-            $versionTest = shell_exec("{$ytDlpPath} --version 2>&1");
-            
-            if (!is_executable($ytDlpPath)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Failed to set executable permissions',
-                    'debug_info' => array_merge($debugInfo, $permissionInfo, [
-                        'version_test' => $versionTest
-                    ])
-                ], 500);
-            }
-
-            // Ensure the output directory exists
+            // Create output directory if it doesn't exist
             if (!file_exists($outputDir)) {
                 mkdir($outputDir, 0755, true);
             }
 
-            // Try to execute yt-dlp
-            $command = "bash -c '{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\" 2>&1'";
-            $output = shell_exec($command);
+            // Run yt-dlp using Process
+            $process = new Process([
+                $ytDlpPath,
+                '-x',
+                '--audio-format', 'mp3',
+                '-o', $outputDir . '/%(title)s.%(ext)s',
+                $videoUrl
+            ]);
+            
+            $process->setTimeout(300); // 5 minutes timeout
+            $process->run();
 
-            if (empty(glob($outputDir . '/*.mp3'))) {
+            if (!$process->isSuccessful()) {
                 return response()->json([
                     'success' => false,
                     'error' => 'Download failed',
-                    'command_output' => $output,
-                    'debug_info' => array_merge($debugInfo, $permissionInfo, [
-                        'version_test' => $versionTest,
-                        'command_used' => $command
+                    'output' => $process->getErrorOutput(),
+                    'command' => $process->getCommandLine(),
+                    'debug_info' => array_merge($debugInfo, [
+                        'exit_code' => $process->getExitCode(),
+                        'working_directory' => $process->getWorkingDirectory()
                     ])
                 ], 500);
             }
 
             // Find the most recently modified MP3 file
             $files = glob($outputDir . '/*.mp3');
-            if (!$files) {
+            if (empty($files)) {
                 return response()->json([
                     'success' => false,
                     'error' => 'No MP3 file found',
-                    'details' => $output
+                    'output' => $process->getOutput(),
+                    'error_output' => $process->getErrorOutput()
                 ], 500);
             }
 
@@ -107,17 +88,14 @@ class MusicController extends Controller
                 return filemtime($b) - filemtime($a);
             });
 
-            $latestFile = $files[0]; // Get the most recent file
-
+            $latestFile = $files[0];
             return response()->download($latestFile)->deleteFileAfterSend(true);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'error' => $e->getMessage(),
-                'debug_info' => array_merge($debugInfo, [
-                    'exception_trace' => $e->getTraceAsString()
-                ])
+                'debug_info' => $debugInfo
             ], 500);
         }
     }
