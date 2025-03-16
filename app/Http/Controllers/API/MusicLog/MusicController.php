@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API\MusicLog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; 
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -17,30 +17,49 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = base_path('bin/yt-dlp'); // NEW (Linux-compatible)
-        $outputDir = storage_path('app/public/downloads'); // Store in storage directory
-        $videoUrl = $request->input('url');
+        // Use Linux-compatible yt-dlp path
+        $ytDlpPath = base_path('bin/yt-dlp');
+
+        // Use a temporary writable directory (since Railway may block storage_path)
+        $outputDir = "/tmp/downloads";
 
         // Ensure the output directory exists
         if (!file_exists($outputDir)) {
             mkdir($outputDir, 0755, true);
         }
 
-        \Log::info('Starting audio download', ['url' => $videoUrl]);
+        $videoUrl = $request->input('url');
 
-        // Construct the shell command
-        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
-        $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
+        Log::info('Starting audio download', ['url' => $videoUrl]);
 
-        \Log::info('Command output', ['output' => $output]);
+        // Build command safely
+        $command = [
+            $ytDlpPath, '-x', '--audio-format', 'mp3', '-o',
+            $outputDir . '/%(title)s.%(ext)s', $videoUrl
+        ];
+
+        // Use Symfony Process for better execution control
+        $process = new Process($command);
+        $process->run();
+
+        // Log errors if process fails
+        if (!$process->isSuccessful()) {
+            Log::error('yt-dlp failed', ['error' => $process->getErrorOutput()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to download MP3',
+                'details' => $process->getErrorOutput()
+            ], 500);
+        }
+
+        Log::info('Command output', ['output' => $process->getOutput()]);
 
         // Find the most recently modified MP3 file
         $files = glob($outputDir . '/*.mp3');
         if (!$files) {
             return response()->json([
                 'success' => false,
-                'error' => 'No MP3 file found',
-                'details' => $output
+                'error' => 'No MP3 file found'
             ], 500);
         }
 
@@ -49,9 +68,9 @@ class MusicController extends Controller
             return filemtime($b) - filemtime($a);
         });
 
-        $latestFile = $files[0]; // Get the most recent file
+        $latestFile = $files[0];
 
+        // Return file for download & delete after sending
         return response()->download($latestFile)->deleteFileAfterSend(true);
     }
-
 }
