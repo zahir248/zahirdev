@@ -17,42 +17,69 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = base_path('yt-dlp_linux'); // Get bin path dynamically
-$outputDir = storage_path('app/public/downloads'); // Store in storage directory
-$videoUrl = $request->input('url');
+        $ytDlpPath = base_path('bin/yt-dlp_linux'); // Changed to Linux binary
+        $outputDir = storage_path('app/public/downloads');
+        $videoUrl = $request->input('url');
 
-// Ensure the yt-dlp binary exists
-if (!file_exists($ytDlpPath)) {
-    throw new Exception("yt-dlp binary not found at $ytDlpPath");
-}
+        // Debug current state
+        \Log::info('Binary status check', [
+            'file_exists' => file_exists($ytDlpPath),
+            'current_perms' => file_exists($ytDlpPath) ? substr(sprintf('%o', fileperms($ytDlpPath)), -4) : 'file_missing',
+            'is_executable' => is_executable($ytDlpPath),
+            'user' => shell_exec('whoami'),
+            'file_owner' => file_exists($ytDlpPath) ? posix_getpwuid(fileowner($ytDlpPath)) : 'file_missing'
+        ]);
 
-// Check if the yt-dlp binary is executable
-if (is_file($ytDlpPath) && !is_executable($ytDlpPath)) {
-    // If not executable, set the permissions to allow execution
-    chmod($ytDlpPath, 0755); // rwxr-xr-x (read, write, and execute for owner, read and execute for others)
-}
+        // Try multiple permission setting approaches
+        if (file_exists($ytDlpPath)) {
+            try {
+                // Method 1: PHP chmod
+                chmod($ytDlpPath, 0755);
+                
+                // Method 2: Shell chmod
+                shell_exec("chmod 755 {$ytDlpPath} 2>&1");
+                
+                // Method 3: Explicit shell chmod with sudo (if available)
+                shell_exec("sudo chmod 755 {$ytDlpPath} 2>&1");
+                
+                // Log the results after permission changes
+                \Log::info('Permission update results', [
+                    'new_perms' => substr(sprintf('%o', fileperms($ytDlpPath)), -4),
+                    'is_executable' => is_executable($ytDlpPath)
+                ]);
 
-// Ensure the output directory exists
-if (!file_exists($outputDir)) {
-    mkdir($outputDir, 0755, true); // Create the directory if it doesn't exist
-}
+                if (!is_executable($ytDlpPath)) {
+                    throw new \Exception('Failed to set executable permissions');
+                }
+            } catch (\Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Permission setting failed',
+                    'message' => $e->getMessage(),
+                    'details' => [
+                        'current_perms' => substr(sprintf('%o', fileperms($ytDlpPath)), -4),
+                        'is_executable' => is_executable($ytDlpPath)
+                    ]
+                ], 500);
+            }
+        } else {
+            return response()->json([
+                'success' => false,
+                'error' => 'yt-dlp_linux binary not found',
+                'path' => $ytDlpPath
+            ], 500);
+        }
 
-// Ensure the output directory has write permissions
-if (!is_writable($outputDir)) {
-    chmod($outputDir, 0775); // Set write permissions for the directory
-}
-
-// You can also add extra checks for the ownership if needed
-if (fileowner($outputDir) !== posix_geteuid()) {
-    chown($outputDir, posix_geteuid()); // Set the owner to the current user (optional)
-}
-
+        // Ensure the output directory exists
+        if (!file_exists($outputDir)) {
+            mkdir($outputDir, 0755, true);
+        }
 
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
-        // Construct the shell command
-        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
-        $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
+        // Use bash explicitly for Linux environment
+        $command = "bash -c '{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\" 2>&1'";
+        $output = shell_exec($command);
 
         \Log::info('Command output', ['output' => $output]);
 
