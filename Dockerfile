@@ -22,14 +22,24 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /var/www
 
+# Copy composer files first to leverage Docker cache
+COPY composer.json composer.lock ./
+
+# Install composer dependencies
+RUN composer install --no-scripts --no-autoloader
+
 # Copy application files
-COPY . /var/www
+COPY . .
+
+# Generate optimized autoload files
+RUN composer dump-autoload --optimize
 
 # Set permissions for yt-dlp_linux
 RUN chmod 755 /var/www/bin/yt-dlp_linux
 
 # Set ownership
 RUN chown -R www-data:www-data /var/www
+RUN chmod -R 755 /var/www/storage /var/www/bootstrap/cache
 
 # Make sure the binary is executable
 RUN chmod +x /var/www/bin/yt-dlp_linux
