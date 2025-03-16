@@ -125,7 +125,7 @@ Route::get('/debug-storage', function () {
 });
 
 Route::get('/debug-yt-dlp-run', function () {
-    $ytDlpPath = base_path('bin/yt-dlp.exe');
+    $ytDlpPath = base_path('bin/yt-dlp');
 
     // Run yt-dlp with --version to test execution
     $command = "\"{$ytDlpPath}\" --version";
