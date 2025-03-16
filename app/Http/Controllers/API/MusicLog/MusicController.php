@@ -31,8 +31,10 @@ class MusicController extends Controller
         }
 
         if (!is_executable($ytDlpPath)) {
+            \Log::info('Fixing permissions for yt-dlp');
             shell_exec("chmod +x {$ytDlpPath} && chown www-data:www-data {$ytDlpPath}");
         }
+        
 
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
