@@ -26,6 +26,10 @@ class MusicController extends Controller
             mkdir($outputDir, 0755, true);
         }
 
+        if (!is_writable($outputDir)) {
+            chmod($outputDir, 0755);
+        }
+
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
         // Construct the shell command
