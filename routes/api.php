@@ -90,3 +90,7 @@ Route::post('/update-profile', [UserController::class, 'updateProfile']);
 
 Route::post('/download-mp3', [MusicController::class, 'downloadMP3']);
 
+Route::get('/check-yt-dlp', function () {
+    $ytDlpPath = base_path('bin/yt-dlp.exe');
+    return file_exists($ytDlpPath) ? 'File exists' : 'File not found';
+});
