@@ -17,7 +17,7 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = base_path('bin/yt-dlp.exe'); // Get bin path dynamically
+        $ytDlpPath = base_path('bin/yt-dlp'); // Get bin path dynamically
         $outputDir = storage_path('app/public/downloads'); // Store in storage directory
         $videoUrl = $request->input('url');
 
