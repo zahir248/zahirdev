@@ -95,10 +95,10 @@ Route::get('/check-yt-dlp', function () {
     return file_exists($ytDlpPath) ? 'File exists' : 'File not found';
 });
 
-Route::get('/debug-yt-dlp', function () {
-    $ytDlpPath = base_path('bin/yt-dlp_linux');
-    return $ytDlpPath . ' - ' . (file_exists($ytDlpPath) ? 'File exists' : 'File not found');
-});
+// Route::get('/debug-yt-dlp', function () {
+//     $ytDlpPath = base_path('bin/yt-dlp_linux');
+//     return $ytDlpPath . ' - ' . (file_exists($ytDlpPath) ? 'File exists' : 'File not found');
+// });
 
 Route::get('/test-shell', function () {
     if (!function_exists('shell_exec')) {
