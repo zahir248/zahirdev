@@ -113,3 +113,14 @@ Route::get('/test-shell', function () {
     return "shell_exec() is enabled!";
 });
 
+Route::get('/debug-storage', function () {
+    $outputDir = storage_path('app/public/downloads');
+
+    return response()->json([
+        'path' => $outputDir,
+        'exists' => file_exists($outputDir) ? 'Yes' : 'No',
+        'writable' => is_writable($outputDir) ? 'Yes' : 'No',
+        'permissions' => substr(sprintf('%o', fileperms($outputDir)), -4),
+    ]);
+});
+
