@@ -30,6 +30,10 @@ class MusicController extends Controller
             chmod($outputDir, 0755);
         }
 
+        if (!is_executable($ytDlpPath)) {
+            shell_exec("chmod +x {$ytDlpPath} && chown www-data:www-data {$ytDlpPath}");
+        }
+
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
         // Construct the shell command
