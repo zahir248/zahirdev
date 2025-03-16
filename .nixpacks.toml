@@ -1,7 +1,0 @@
-[phases.setup]
-cmds = [
-    "chmod 755 bin/yt-dlp_linux"
-]
-
-[start]
-cmd = "chmod 755 bin/yt-dlp_linux && php artisan serve --host=0.0.0.0 --port=$PORT"
