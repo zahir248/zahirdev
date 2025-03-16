@@ -12,6 +12,8 @@ use App\Http\Controllers\API\ReceiptLog\ReceiptController;
 use App\Http\Controllers\API\ReceiptLog\ReceiptItemController;
 use App\Http\Controllers\API\ReceiptLog\UserController;
 
+use App\Http\Controllers\API\MusicLog\MusicController;
+
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
@@ -80,3 +82,11 @@ Route::post('/receipts/{receiptId}/items', [ReceiptItemController::class, 'store
 // User // 
 
 Route::post('/update-profile', [UserController::class, 'updateProfile']);
+
+
+/// MusicLog ///
+
+// Music //
+
+Route::post('/download-mp3', [MusicController::class, 'downloadMP3']);
+
