@@ -91,12 +91,12 @@ Route::post('/update-profile', [UserController::class, 'updateProfile']);
 Route::post('/download-mp3', [MusicController::class, 'downloadMP3']);
 
 Route::get('/check-yt-dlp', function () {
-    $ytDlpPath = base_path('bin/yt-dlp');
+    $ytDlpPath = base_path('bin/yt-dlp_linux');
     return file_exists($ytDlpPath) ? 'File exists' : 'File not found';
 });
 
 Route::get('/debug-yt-dlp', function () {
-    $ytDlpPath = base_path('bin/yt-dlp');
+    $ytDlpPath = base_path('bin/yt-dlp_linux');
     return $ytDlpPath . ' - ' . (file_exists($ytDlpPath) ? 'File exists' : 'File not found');
 });
 
@@ -125,7 +125,7 @@ Route::get('/debug-storage', function () {
 });
 
 Route::get('/debug-yt-dlp-run', function () {
-    $ytDlpPath = base_path('bin/yt-dlp');
+    $ytDlpPath = base_path('bin/yt-dlp_linux');
 
     // Run yt-dlp with --version to test execution
     $command = "\"{$ytDlpPath}\" --version";
@@ -138,4 +138,14 @@ Route::get('/debug-yt-dlp-run', function () {
     ]);
 });
 
+Route::get('/debug-os', function () {
+    $os = PHP_OS_FAMILY; // Get OS type
+
+    return Response::json([
+        'os' => $os,
+        'is_windows' => $os === 'Windows' ? 'Yes' : 'No',
+        'is_linux' => $os === 'Linux' ? 'Yes' : 'No',
+        'uname' => php_uname(), // Extra system details
+    ]);
+});
 
