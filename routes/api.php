@@ -99,3 +99,17 @@ Route::get('/debug-yt-dlp', function () {
     $ytDlpPath = base_path('bin/yt-dlp.exe');
     return $ytDlpPath . ' - ' . (file_exists($ytDlpPath) ? 'File exists' : 'File not found');
 });
+
+Route::get('/test-shell', function () {
+    if (!function_exists('shell_exec')) {
+        return "shell_exec() is completely disabled!";
+    }
+
+    $disabledFunctions = explode(',', ini_get('disable_functions'));
+    if (in_array('shell_exec', $disabledFunctions)) {
+        return "shell_exec() is disabled in php.ini!";
+    }
+
+    return "shell_exec() is enabled!";
+});
+
