@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API\MusicLog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; 
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -21,6 +21,12 @@ class MusicController extends Controller
         $outputDir = storage_path('app/public/downloads'); // Store in storage directory
         $videoUrl = $request->input('url');
 
+        // Ensure yt-dlp has execute permissions
+        if (!is_executable($ytDlpPath)) {
+            \Log::info('Setting execute permission for yt-dlp');
+            shell_exec("chmod +x {$ytDlpPath}");
+        }
+
         // Ensure the output directory exists
         if (!file_exists($outputDir)) {
             mkdir($outputDir, 0755, true);
@@ -33,7 +39,7 @@ class MusicController extends Controller
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
         // Construct the shell command
-        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
+        $command = "{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
         $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
 
         \Log::info('Command output', ['output' => $output]);
@@ -57,5 +63,4 @@ class MusicController extends Controller
 
         return response()->download($latestFile)->deleteFileAfterSend(true);
     }
-
 }
