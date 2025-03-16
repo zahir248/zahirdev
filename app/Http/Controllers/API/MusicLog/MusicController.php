@@ -4,7 +4,9 @@ namespace App\Http\Controllers\API\MusicLog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Log; 
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class MusicController extends Controller
 {
@@ -15,33 +17,22 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = base_path('bin/yt-dlp_linux'); // Get binary path dynamically
+        $ytDlpPath = storage_path('yt-dlp/yt-dlp_linux');
         $outputDir = storage_path('app/public/downloads'); // Store in storage directory
         $videoUrl = $request->input('url');
-
-        // Ensure yt-dlp exists before setting permissions
-        if (is_file($ytDlpPath) && !is_executable($ytDlpPath)) {
-            Log::info('Setting execute permissions for yt-dlp');
-            
-            // Try using chmod() directly for better security
-            if (!@chmod($ytDlpPath, 0755)) {
-                // Fallback to shell_exec if chmod() fails
-                shell_exec("chmod +x " . escapeshellarg($ytDlpPath));
-            }
-        }
 
         // Ensure the output directory exists
         if (!file_exists($outputDir)) {
             mkdir($outputDir, 0755, true);
         }
 
-        Log::info('Starting audio download', ['url' => $videoUrl]);
+        \Log::info('Starting audio download', ['url' => $videoUrl]);
 
         // Construct the shell command
-        $command = escapeshellcmd("$ytDlpPath -x --audio-format mp3 -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"");
+        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
         $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
 
-        Log::info('Command output', ['output' => $output]);
+        \Log::info('Command output', ['output' => $output]);
 
         // Find the most recently modified MP3 file
         $files = glob($outputDir . '/*.mp3');
@@ -54,10 +45,13 @@ class MusicController extends Controller
         }
 
         // Sort files by modification time, latest first
-        usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
+        usort($files, function ($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
 
         $latestFile = $files[0]; // Get the most recent file
 
         return response()->download($latestFile)->deleteFileAfterSend(true);
     }
+
 }
