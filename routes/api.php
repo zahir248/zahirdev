@@ -149,3 +149,4 @@ Route::get('/debug-os', function () {
     ]);
 });
 
+Route::get('/debug-yt-dlp', [MusicController::class, 'debugYtDlp']);
