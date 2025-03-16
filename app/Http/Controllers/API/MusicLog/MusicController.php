@@ -39,8 +39,9 @@ class MusicController extends Controller
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
         // Construct the shell command
-        $command = "{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
-        $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
+        $command = "bash -c '{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"'";
+$output = shell_exec($command . " 2>&1");
+
 
         \Log::info('Command output', ['output' => $output]);
 
