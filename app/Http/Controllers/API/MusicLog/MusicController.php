@@ -26,16 +26,6 @@ class MusicController extends Controller
             mkdir($outputDir, 0755, true);
         }
 
-        if (!is_writable($outputDir)) {
-            chmod($outputDir, 0755);
-        }
-
-        if (!is_executable($ytDlpPath)) {
-            \Log::info('Fixing permissions for yt-dlp');
-            shell_exec("chmod +x {$ytDlpPath} && chown www-data:www-data {$ytDlpPath}");
-        }
-        
-
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
         // Construct the shell command
@@ -63,38 +53,5 @@ class MusicController extends Controller
 
         return response()->download($latestFile)->deleteFileAfterSend(true);
     }
-    public function debugYtDlp()
-{
-    $ytDlpPath = base_path('bin/yt-dlp_linux');
-
-    // Check if the file exists
-    $fileExists = file_exists($ytDlpPath);
-    
-    // Check permissions
-    $filePermissions = shell_exec("ls -l " . escapeshellarg($ytDlpPath));
-    
-    // Check if the file is executable
-    $isExecutable = is_executable($ytDlpPath);
-    
-    // Try running yt-dlp and capture output
-    $testCommand = "{$ytDlpPath} --version";
-    $output = shell_exec($testCommand . " 2>&1");
-
-    // Log results
-    \Log::info('Debugging yt-dlp', [
-        'file_exists' => $fileExists,
-        'permissions' => $filePermissions,
-        'is_executable' => $isExecutable,
-        'output' => $output
-    ]);
-
-    return response()->json([
-        'file_exists' => $fileExists,
-        'permissions' => $filePermissions,
-        'is_executable' => $isExecutable,
-        'output' => $output
-    ]);
-}
-
 
 }
