@@ -17,90 +17,109 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = base_path('bin/yt-dlp_linux'); // Changed to Linux binary
+        $ytDlpPath = base_path('bin/yt-dlp_linux');
         $outputDir = storage_path('app/public/downloads');
         $videoUrl = $request->input('url');
 
-        // Debug current state
-        \Log::info('Binary status check', [
+        // Collect environment information
+        $debugInfo = [
+            'pwd' => shell_exec('pwd'),
+            'ls_bin' => shell_exec('ls -la ' . base_path('bin')),
+            'current_user' => shell_exec('id'),
             'file_exists' => file_exists($ytDlpPath),
-            'current_perms' => file_exists($ytDlpPath) ? substr(sprintf('%o', fileperms($ytDlpPath)), -4) : 'file_missing',
-            'is_executable' => is_executable($ytDlpPath),
-            'user' => shell_exec('whoami'),
-            'file_owner' => file_exists($ytDlpPath) ? posix_getpwuid(fileowner($ytDlpPath)) : 'file_missing'
-        ]);
+            'ytdlp_path' => $ytDlpPath,
+            'output_dir' => $outputDir
+        ];
 
-        // Try multiple permission setting approaches
-        if (file_exists($ytDlpPath)) {
-            try {
-                // Method 1: PHP chmod
-                chmod($ytDlpPath, 0755);
-                
-                // Method 2: Shell chmod
-                shell_exec("chmod 755 {$ytDlpPath} 2>&1");
-                
-                // Method 3: Explicit shell chmod with sudo (if available)
-                shell_exec("sudo chmod 755 {$ytDlpPath} 2>&1");
-                
-                // Log the results after permission changes
-                \Log::info('Permission update results', [
-                    'new_perms' => substr(sprintf('%o', fileperms($ytDlpPath)), -4),
-                    'is_executable' => is_executable($ytDlpPath)
-                ]);
+        // Check if file exists and try to fix permissions
+        if (!file_exists($ytDlpPath)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'yt-dlp binary not found',
+                'debug_info' => $debugInfo
+            ], 500);
+        }
 
-                if (!is_executable($ytDlpPath)) {
-                    throw new \Exception('Failed to set executable permissions');
-                }
-            } catch (\Exception $e) {
+        try {
+            // Get initial state
+            $initialPerms = substr(sprintf('%o', fileperms($ytDlpPath)), -4);
+            
+            // Try multiple chmod approaches
+            chmod($ytDlpPath, 0755);
+            $shellChmod = shell_exec("chmod 755 {$ytDlpPath} 2>&1");
+            $bashChmod = shell_exec("bash -c 'chmod 755 {$ytDlpPath}' 2>&1");
+
+            // Test file after chmod
+            $permissionInfo = [
+                'initial_perms' => $initialPerms,
+                'final_perms' => substr(sprintf('%o', fileperms($ytDlpPath)), -4),
+                'is_executable' => is_executable($ytDlpPath),
+                'chmod_output' => $shellChmod,
+                'bash_chmod_output' => $bashChmod
+            ];
+
+            // Test yt-dlp directly
+            $versionTest = shell_exec("{$ytDlpPath} --version 2>&1");
+            
+            if (!is_executable($ytDlpPath)) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Permission setting failed',
-                    'message' => $e->getMessage(),
-                    'details' => [
-                        'current_perms' => substr(sprintf('%o', fileperms($ytDlpPath)), -4),
-                        'is_executable' => is_executable($ytDlpPath)
-                    ]
+                    'error' => 'Failed to set executable permissions',
+                    'debug_info' => array_merge($debugInfo, $permissionInfo, [
+                        'version_test' => $versionTest
+                    ])
                 ], 500);
             }
-        } else {
+
+            // Ensure the output directory exists
+            if (!file_exists($outputDir)) {
+                mkdir($outputDir, 0755, true);
+            }
+
+            // Try to execute yt-dlp
+            $command = "bash -c '{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\" 2>&1'";
+            $output = shell_exec($command);
+
+            if (empty(glob($outputDir . '/*.mp3'))) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Download failed',
+                    'command_output' => $output,
+                    'debug_info' => array_merge($debugInfo, $permissionInfo, [
+                        'version_test' => $versionTest,
+                        'command_used' => $command
+                    ])
+                ], 500);
+            }
+
+            // Find the most recently modified MP3 file
+            $files = glob($outputDir . '/*.mp3');
+            if (!$files) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No MP3 file found',
+                    'details' => $output
+                ], 500);
+            }
+
+            // Sort files by modification time, latest first
+            usort($files, function ($a, $b) {
+                return filemtime($b) - filemtime($a);
+            });
+
+            $latestFile = $files[0]; // Get the most recent file
+
+            return response()->download($latestFile)->deleteFileAfterSend(true);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'error' => 'yt-dlp_linux binary not found',
-                'path' => $ytDlpPath
+                'error' => $e->getMessage(),
+                'debug_info' => array_merge($debugInfo, [
+                    'exception_trace' => $e->getTraceAsString()
+                ])
             ], 500);
         }
-
-        // Ensure the output directory exists
-        if (!file_exists($outputDir)) {
-            mkdir($outputDir, 0755, true);
-        }
-
-        \Log::info('Starting audio download', ['url' => $videoUrl]);
-
-        // Use bash explicitly for Linux environment
-        $command = "bash -c '{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\" 2>&1'";
-        $output = shell_exec($command);
-
-        \Log::info('Command output', ['output' => $output]);
-
-        // Find the most recently modified MP3 file
-        $files = glob($outputDir . '/*.mp3');
-        if (!$files) {
-            return response()->json([
-                'success' => false,
-                'error' => 'No MP3 file found',
-                'details' => $output
-            ], 500);
-        }
-
-        // Sort files by modification time, latest first
-        usort($files, function ($a, $b) {
-            return filemtime($b) - filemtime($a);
-        });
-
-        $latestFile = $files[0]; // Get the most recent file
-
-        return response()->download($latestFile)->deleteFileAfterSend(true);
     }
 
 }
