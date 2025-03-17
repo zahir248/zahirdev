@@ -12,46 +12,79 @@ class MusicController extends Controller
 {
     public function downloadMP3(Request $request)
     {
-        // Validate that 'url' is provided
         $request->validate([
-            'url' => 'required|url'
+            'url' => 'required|url',
         ]);
 
-        $ytDlpPath = base_path('bin/yt-dlp.exe'); // Get bin path dynamically
-        $outputDir = storage_path('app/public/downloads'); // Store in storage directory
-        $videoUrl = $request->input('url');
+        $url = escapeshellarg($request->input('url')); // Prevent shell injection
 
-        // Ensure the output directory exists
-        if (!file_exists($outputDir)) {
-            mkdir($outputDir, 0755, true);
+        // Use system-installed Python and yt-dlp
+        $pythonPath = 'python3';
+        $ytDlpPath = 'yt-dlp';
+
+        // Check if Python is installed
+        $checkPython = shell_exec("which python3");
+        if (empty(trim($checkPython))) {
+            Log::error("Python3 is not installed. Installing...");
+            shell_exec("apt update && apt install -y python3 python3-pip");
         }
 
-        \Log::info('Starting audio download', ['url' => $videoUrl]);
-
-        // Construct the shell command
-        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
-        $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
-
-        \Log::info('Command output', ['output' => $output]);
-
-        // Find the most recently modified MP3 file
-        $files = glob($outputDir . '/*.mp3');
-        if (!$files) {
-            return response()->json([
-                'success' => false,
-                'error' => 'No MP3 file found',
-                'details' => $output
-            ], 500);
+        // Check if yt-dlp is installed
+        $checkYtDlp = shell_exec("which yt-dlp");
+        if (empty(trim($checkYtDlp))) {
+            Log::error("yt-dlp is not installed. Installing...");
+            shell_exec("pip3 install --upgrade yt-dlp");
         }
 
-        // Sort files by modification time, latest first
-        usort($files, function ($a, $b) {
-            return filemtime($b) - filemtime($a);
+        // Verify again after installation
+        if (empty(trim(shell_exec("which yt-dlp")))) {
+            Log::error("yt-dlp installation failed.");
+            return response()->json(['message' => 'yt-dlp installation failed'], 500);
+        }
+
+        // Get video title
+        $getTitleCommand = "{$pythonPath} -m yt_dlp --get-title {$url}";
+        $title = trim(shell_exec($getTitleCommand));
+
+        if (empty($title)) {
+            Log::error("Failed to retrieve video title.");
+            return response()->json(['message' => 'Failed to retrieve video title'], 500);
+        }
+
+        // Sanitize filename
+        $safeTitle = preg_replace('/[\/:*?"<>|]/', '_', $title);
+        $filename = "{$safeTitle}.mp3";
+        $outputFile = "/tmp/{$filename}"; // Use /tmp for ephemeral storage
+
+        // Run yt-dlp command to download and convert
+        $ytDlpCommand = "{$pythonPath} -m yt_dlp -x --audio-format mp3 -o " . escapeshellarg($outputFile) . " " . $url;
+
+        Log::info("Starting yt-dlp download...", ['command' => $ytDlpCommand]);
+
+        $output = shell_exec($ytDlpCommand . ' 2>&1');
+
+        Log::info("yt-dlp output:", ['output' => $output]);
+
+        if (!file_exists($outputFile)) {
+            Log::error("yt-dlp failed: File was not created.", ['output' => $output]);
+            return response()->json(['message' => 'Conversion failed. Check logs for details.'], 500);
+        }
+
+        Log::info("yt-dlp download completed successfully.", ['file' => $outputFile]);
+
+        // Automatically delete file after response
+        register_shutdown_function(function () use ($outputFile) {
+            if (file_exists($outputFile)) {
+                unlink($outputFile);
+                Log::info("File deleted successfully after response: " . $outputFile);
+            }
         });
 
-        $latestFile = $files[0]; // Get the most recent file
-
-        return response()->download($latestFile)->deleteFileAfterSend(true);
+        // Return the MP3 file
+        return response()->file($outputFile, [
+            'Content-Type' => 'audio/mpeg',
+            'Content-Disposition' => 'inline; filename="' . basename($outputFile) . '"'
+        ]);
     }
 
 }
