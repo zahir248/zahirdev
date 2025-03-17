@@ -14,7 +14,7 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = 'yt-dlp'; // Use Linux-compatible yt-dlp
+        $ytDlpPath = '/usr/local/bin/yt-dlp'; // Linux-compatible yt-dlp path
         $outputDir = sys_get_temp_dir(); // Temporary directory for Railway
         $videoUrl = $request->input('url');
 
