@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API\MusicLog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; 
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -18,30 +18,16 @@ class MusicController extends Controller
 
         $url = escapeshellarg($request->input('url')); // Escape URL to prevent injection
 
-        // Define Python, yt-dlp, and ffmpeg paths
-        $pythonPath = base_path('python/python-3.10/python.exe');
-        $ytDlpPath = base_path('python/python-3.10/Scripts/yt-dlp.exe');
-        $ffmpegPath = base_path('python/python-3.10/ffmpeg/ffmpeg.exe'); 
+        // Check and install dependencies if not available
+        $this->ensureDependencies();
 
-        // Check if yt-dlp and ffmpeg exist
-        if (!file_exists($ytDlpPath)) {
-            Log::error("yt-dlp not found at: {$ytDlpPath}");
-            return response()->json(['message' => 'yt-dlp not found'], 500);
-        }
-
-        if (!file_exists($ffmpegPath)) {
-            Log::error("ffmpeg not found at: {$ffmpegPath}");
-            return response()->json(['message' => 'ffmpeg not found'], 500);
-        }
-
-        // Ensure yt-dlp is executable (Linux/macOS only)
-        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
-            shell_exec("chmod +x " . escapeshellarg($ytDlpPath));
-            shell_exec("chmod +x " . escapeshellarg($ffmpegPath));
-        }
+        // Use system Python
+        $pythonPath = 'python3';
+        $ytDlpPath = 'yt-dlp';
+        $ffmpegPath = 'ffmpeg';
 
         // Use yt-dlp to get the video title
-        $getTitleCommand = "{$pythonPath} -m yt_dlp --get-title {$url}";
+        $getTitleCommand = "{$pythonPath} -m {$ytDlpPath} --get-title {$url}";
         $title = trim(shell_exec($getTitleCommand));
 
         if (empty($title)) {
@@ -55,7 +41,7 @@ class MusicController extends Controller
         $outputFile = storage_path("app/public/{$filename}");
 
         // Run yt-dlp command with ffmpeg support
-        $ytDlpCommand = "{$pythonPath} -m yt_dlp -x --audio-format mp3 --ffmpeg-location " . escapeshellarg($ffmpegPath) . " -o " . escapeshellarg($outputFile) . " " . $url;
+        $ytDlpCommand = "{$pythonPath} -m {$ytDlpPath} -x --audio-format mp3 --ffmpeg-location {$ffmpegPath} -o " . escapeshellarg($outputFile) . " " . $url;
 
         Log::info("Starting yt-dlp download...", ['command' => $ytDlpCommand]);
 
@@ -83,5 +69,22 @@ class MusicController extends Controller
             'Content-Type' => 'audio/mpeg',
             'Content-Disposition' => 'inline; filename="' . basename($outputFile) . '"'
         ]);
+    }
+
+    private function ensureDependencies()
+    {
+        // Check if yt-dlp is installed
+        $ytDlpCheck = shell_exec("which yt-dlp");
+        if (empty(trim($ytDlpCheck))) {
+            Log::info("yt-dlp not found. Installing...");
+            shell_exec("pip install yt-dlp");
+        }
+
+        // Check if ffmpeg is installed
+        $ffmpegCheck = shell_exec("which ffmpeg");
+        if (empty(trim($ffmpegCheck))) {
+            Log::info("ffmpeg not found. Installing...");
+            shell_exec("apt update && apt install -y ffmpeg");
+        }
     }
 }
