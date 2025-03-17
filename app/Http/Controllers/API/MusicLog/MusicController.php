@@ -4,25 +4,33 @@ namespace App\Http\Controllers\API\MusicLog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Log; 
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class MusicController extends Controller
 {
     public function downloadMP3(Request $request)
     {
+        // Validate that 'url' is provided
         $request->validate([
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = '/usr/local/bin/yt-dlp'; // Linux-compatible yt-dlp path
-        $outputDir = sys_get_temp_dir(); // Temporary directory for Railway
+        $ytDlpPath = base_path('bin/yt-dlp.exe'); // Get bin path dynamically
+        $outputDir = storage_path('app/public/downloads'); // Store in storage directory
         $videoUrl = $request->input('url');
+
+        // Ensure the output directory exists
+        if (!file_exists($outputDir)) {
+            mkdir($outputDir, 0755, true);
+        }
 
         \Log::info('Starting audio download', ['url' => $videoUrl]);
 
         // Construct the shell command
-        $command = "{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"$videoUrl\" 2>&1";
-        $output = shell_exec($command);
+        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
+        $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
 
         \Log::info('Command output', ['output' => $output]);
 
@@ -36,11 +44,14 @@ class MusicController extends Controller
             ], 500);
         }
 
-        usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
+        // Sort files by modification time, latest first
+        usort($files, function ($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
 
         $latestFile = $files[0]; // Get the most recent file
 
         return response()->download($latestFile)->deleteFileAfterSend(true);
     }
-}
 
+}
