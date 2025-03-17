@@ -5,86 +5,42 @@ namespace App\Http\Controllers\API\MusicLog;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Process\Process;
-use Symfony\Component\Process\Exception\ProcessFailedException;
 
 class MusicController extends Controller
 {
     public function downloadMP3(Request $request)
     {
         $request->validate([
-            'url' => 'required|url',
+            'url' => 'required|url'
         ]);
 
-        $url = escapeshellarg($request->input('url')); // Escape URL to prevent injection
+        $ytDlpPath = 'yt-dlp'; // Use Linux-compatible yt-dlp
+        $outputDir = sys_get_temp_dir(); // Temporary directory for Railway
+        $videoUrl = $request->input('url');
 
-        // Check and install dependencies if not available
-        $this->ensureDependencies();
+        \Log::info('Starting audio download', ['url' => $videoUrl]);
 
-        // Use system Python
-        $pythonPath = 'python3';
-        $ytDlpPath = 'yt-dlp';
-        $ffmpegPath = 'ffmpeg';
+        // Construct the shell command
+        $command = "{$ytDlpPath} -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"$videoUrl\" 2>&1";
+        $output = shell_exec($command);
 
-        // Use yt-dlp to get the video title
-        $getTitleCommand = "{$pythonPath} -m {$ytDlpPath} --get-title {$url}";
-        $title = trim(shell_exec($getTitleCommand));
+        \Log::info('Command output', ['output' => $output]);
 
-        if (empty($title)) {
-            Log::error("Failed to retrieve video title.");
-            return response()->json(['message' => 'Failed to retrieve video title'], 500);
+        // Find the most recently modified MP3 file
+        $files = glob($outputDir . '/*.mp3');
+        if (!$files) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No MP3 file found',
+                'details' => $output
+            ], 500);
         }
 
-        // Clean title for safe filename
-        $safeTitle = preg_replace('/[\/:*?"<>|]/', '_', $title);
-        $filename = "{$safeTitle}.mp3";
-        $outputFile = storage_path("app/public/{$filename}");
+        usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
 
-        // Run yt-dlp command with ffmpeg support
-        $ytDlpCommand = "{$pythonPath} -m {$ytDlpPath} -x --audio-format mp3 --ffmpeg-location {$ffmpegPath} -o " . escapeshellarg($outputFile) . " " . $url;
+        $latestFile = $files[0]; // Get the most recent file
 
-        Log::info("Starting yt-dlp download...", ['command' => $ytDlpCommand]);
-
-        $output = shell_exec($ytDlpCommand . ' 2>&1');
-
-        Log::info("yt-dlp output:", ['output' => $output]);
-
-        if (!file_exists($outputFile)) {
-            Log::error("yt-dlp failed: File was not created.", ['output' => $output]);
-            return response()->json(['message' => 'Conversion failed. Check logs for details.'], 500);
-        }
-
-        Log::info("yt-dlp download completed successfully.", ['file' => $outputFile]);
-
-        // Register a function to delete the file after response is sent
-        register_shutdown_function(function () use ($outputFile) {
-            if (file_exists($outputFile)) {
-                unlink($outputFile);
-                Log::info("File deleted successfully after response: " . $outputFile);
-            }
-        });
-
-        // Return the MP3 file as a direct response to Flutter
-        return response()->file($outputFile, [
-            'Content-Type' => 'audio/mpeg',
-            'Content-Disposition' => 'inline; filename="' . basename($outputFile) . '"'
-        ]);
-    }
-
-    private function ensureDependencies()
-    {
-        // Check if yt-dlp is installed
-        $ytDlpCheck = shell_exec("which yt-dlp");
-        if (empty(trim($ytDlpCheck))) {
-            Log::info("yt-dlp not found. Installing...");
-            shell_exec("pip install yt-dlp");
-        }
-
-        // Check if ffmpeg is installed
-        $ffmpegCheck = shell_exec("which ffmpeg");
-        if (empty(trim($ffmpegCheck))) {
-            Log::info("ffmpeg not found. Installing...");
-            shell_exec("apt update && apt install -y ffmpeg");
-        }
+        return response()->download($latestFile)->deleteFileAfterSend(true);
     }
 }
+
