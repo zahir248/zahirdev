@@ -12,46 +12,76 @@ class MusicController extends Controller
 {
     public function downloadMP3(Request $request)
     {
-        // Validate that 'url' is provided
         $request->validate([
-            'url' => 'required|url'
+            'url' => 'required|url',
         ]);
 
-        $ytDlpPath = base_path('bin/yt-dlp.exe'); // Get bin path dynamically
-        $outputDir = storage_path('app/public/downloads'); // Store in storage directory
-        $videoUrl = $request->input('url');
+        $url = escapeshellarg($request->input('url')); // Escape URL to prevent injection
 
-        // Ensure the output directory exists
-        if (!file_exists($outputDir)) {
-            mkdir($outputDir, 0755, true);
+        // Define Python, yt-dlp, and ffmpeg paths
+        $pythonPath = base_path('python/python-3.10/python.exe');
+        $ytDlpPath = base_path('python/python-3.10/Scripts/yt-dlp.exe');
+        $ffmpegPath = base_path('python/python-3.10/ffmpeg/ffmpeg.exe'); 
+
+        // Check if yt-dlp and ffmpeg exist
+        if (!file_exists($ytDlpPath)) {
+            Log::error("yt-dlp not found at: {$ytDlpPath}");
+            return response()->json(['message' => 'yt-dlp not found'], 500);
         }
 
-        \Log::info('Starting audio download', ['url' => $videoUrl]);
-
-        // Construct the shell command
-        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
-        $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
-
-        \Log::info('Command output', ['output' => $output]);
-
-        // Find the most recently modified MP3 file
-        $files = glob($outputDir . '/*.mp3');
-        if (!$files) {
-            return response()->json([
-                'success' => false,
-                'error' => 'No MP3 file found',
-                'details' => $output
-            ], 500);
+        if (!file_exists($ffmpegPath)) {
+            Log::error("ffmpeg not found at: {$ffmpegPath}");
+            return response()->json(['message' => 'ffmpeg not found'], 500);
         }
 
-        // Sort files by modification time, latest first
-        usort($files, function ($a, $b) {
-            return filemtime($b) - filemtime($a);
+        // Ensure yt-dlp is executable (Linux/macOS only)
+        if (strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN') {
+            shell_exec("chmod +x " . escapeshellarg($ytDlpPath));
+            shell_exec("chmod +x " . escapeshellarg($ffmpegPath));
+        }
+
+        // Use yt-dlp to get the video title
+        $getTitleCommand = "{$pythonPath} -m yt_dlp --get-title {$url}";
+        $title = trim(shell_exec($getTitleCommand));
+
+        if (empty($title)) {
+            Log::error("Failed to retrieve video title.");
+            return response()->json(['message' => 'Failed to retrieve video title'], 500);
+        }
+
+        // Clean title for safe filename
+        $safeTitle = preg_replace('/[\/:*?"<>|]/', '_', $title);
+        $filename = "{$safeTitle}.mp3";
+        $outputFile = storage_path("app/public/{$filename}");
+
+        // Run yt-dlp command with ffmpeg support
+        $ytDlpCommand = "{$pythonPath} -m yt_dlp -x --audio-format mp3 --ffmpeg-location " . escapeshellarg($ffmpegPath) . " -o " . escapeshellarg($outputFile) . " " . $url;
+
+        Log::info("Starting yt-dlp download...", ['command' => $ytDlpCommand]);
+
+        $output = shell_exec($ytDlpCommand . ' 2>&1');
+
+        Log::info("yt-dlp output:", ['output' => $output]);
+
+        if (!file_exists($outputFile)) {
+            Log::error("yt-dlp failed: File was not created.", ['output' => $output]);
+            return response()->json(['message' => 'Conversion failed. Check logs for details.'], 500);
+        }
+
+        Log::info("yt-dlp download completed successfully.", ['file' => $outputFile]);
+
+        // Register a function to delete the file after response is sent
+        register_shutdown_function(function () use ($outputFile) {
+            if (file_exists($outputFile)) {
+                unlink($outputFile);
+                Log::info("File deleted successfully after response: " . $outputFile);
+            }
         });
 
-        $latestFile = $files[0]; // Get the most recent file
-
-        return response()->download($latestFile)->deleteFileAfterSend(true);
+        // Return the MP3 file as a direct response to Flutter
+        return response()->file($outputFile, [
+            'Content-Type' => 'audio/mpeg',
+            'Content-Disposition' => 'inline; filename="' . basename($outputFile) . '"'
+        ]);
     }
-
 }
