@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API\MusicLog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Log; 
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -13,7 +13,6 @@ class MusicController extends Controller
     public function downloadMP3(Request $request)
 {
     $debugInfo = []; // Array to store debug data
-
     $debugInfo['request_url'] = $request->input('url');
 
     // Validate the request
@@ -21,12 +20,13 @@ class MusicController extends Controller
         'url' => 'required|url'
     ]);
 
-    $ytDlpPath = base_path('bin/yt-dlp.exe'); 
     $outputDir = storage_path('app/public/downloads');
     $videoUrl = $request->input('url');
+    $binDir = base_path('bin');
+    $ytDlpPath = $binDir . '/yt-dlp';
 
-    $debugInfo['yt_dlp_path'] = $ytDlpPath;
     $debugInfo['output_directory'] = $outputDir;
+    $debugInfo['yt_dlp_path'] = $ytDlpPath;
 
     // Ensure output directory exists
     if (!file_exists($outputDir)) {
@@ -36,39 +36,46 @@ class MusicController extends Controller
         $debugInfo['directory_exists'] = true;
     }
 
-    // Check if yt-dlp is executable
-    if (!is_executable($ytDlpPath)) {
-        $debugInfo['yt_dlp_executable'] = false;
-        return response()->json([
-            'success' => false,
-            'error' => 'yt-dlp is not executable',
-            'debug' => $debugInfo
-        ], 500);
-    } else {
-        $debugInfo['yt_dlp_executable'] = true;
+    // Ensure bin directory exists
+    if (!file_exists($binDir)) {
+        mkdir($binDir, 0755, true);
+        $debugInfo['bin_directory_created'] = true;
     }
 
-    // Check if Wine is installed
-    $checkWine = Process::fromShellCommandline('which wine');
-    $checkWine->run();
-    
-    $debugInfo['wine_check_output'] = trim($checkWine->getOutput());
-    $debugInfo['wine_check_error'] = trim($checkWine->getErrorOutput());
-
-    if (!$checkWine->isSuccessful() || empty(trim($checkWine->getOutput()))) {
-        return response()->json([
-            'success' => false,
-            'error' => 'Wine is not installed',
-            'debug' => $debugInfo
-        ], 500);
+    // Check if yt-dlp exists and is executable
+    if (!file_exists($ytDlpPath) || !is_executable($ytDlpPath)) {
+        $debugInfo['yt_dlp_status'] = 'Not found or not executable - attempting to install';
+        
+        // Download yt-dlp binary
+        $installProcess = Process::fromShellCommandline(
+            "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o \"$ytDlpPath\" && chmod +x \"$ytDlpPath\""
+        );
+        $installProcess->setTimeout(60); // Allow time for download
+        $installProcess->run();
+        
+        $debugInfo['install_stdout'] = trim($installProcess->getOutput());
+        $debugInfo['install_stderr'] = trim($installProcess->getErrorOutput());
+        
+        if (!$installProcess->isSuccessful()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to install yt-dlp',
+                'debug' => $debugInfo
+            ], 500);
+        }
+        
+        $debugInfo['yt_dlp_installed'] = true;
+    } else {
+        $debugInfo['yt_dlp_status'] = 'Already installed';
     }
 
     // Construct the yt-dlp command
-    $command = "wine \"$ytDlpPath\" -x --audio-format mp3 -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
+    $command = "\"$ytDlpPath\" -x --audio-format mp3 -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
     $debugInfo['command'] = $command;
 
     // Execute command
     $process = Process::fromShellCommandline($command);
+    $process->setTimeout(300); // Set a longer timeout for large files
     $process->run();
 
     // Capture command output
@@ -107,6 +114,5 @@ class MusicController extends Controller
         'debug' => $debugInfo
     ]);
 }
-
 
 }
