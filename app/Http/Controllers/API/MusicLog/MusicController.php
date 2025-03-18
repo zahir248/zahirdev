@@ -184,8 +184,9 @@ class MusicController extends Controller
         ], 500);
     }
 
-    // Construct the yt-dlp command with path to FFmpeg
-    $command = "\"$ytDlpPath\" -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" --cookies-from-browser chrome -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
+    // Construct the yt-dlp command with path to FFmpeg and custom cookies file
+    $command = "\"$ytDlpPath\" -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" --cookies \"/app/cookies.txt\" -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
+
     $debugInfo['command'] = $command;
 
     // Execute command
