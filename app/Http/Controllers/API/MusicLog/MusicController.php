@@ -4,7 +4,7 @@ namespace App\Http\Controllers\API\MusicLog;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log; 
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
@@ -17,7 +17,7 @@ class MusicController extends Controller
             'url' => 'required|url'
         ]);
 
-        $ytDlpPath = base_path('bin/yt-dlp.exe'); // Get bin path dynamically
+        $ytDlpPath = base_path('bin/yt-dlp.exe'); // Windows binary path
         $outputDir = storage_path('app/public/downloads'); // Store in storage directory
         $videoUrl = $request->input('url');
 
@@ -26,13 +26,49 @@ class MusicController extends Controller
             mkdir($outputDir, 0755, true);
         }
 
-        \Log::info('Starting audio download', ['url' => $videoUrl]);
+        // Check if Wine is installed
+        $checkWine = Process::fromShellCommandline('which wine');
+        $checkWine->run();
 
-        // Construct the shell command
-        $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
-        $output = shell_exec($command . " 2>&1"); // Capture both stdout and stderr
+        if (!$checkWine->isSuccessful() || empty(trim($checkWine->getOutput()))) {
+            Log::info('Wine is not installed. Attempting to install...');
+            
+            $installWine = Process::fromShellCommandline('apt update && apt install -y wine');
+            $installWine->run();
 
-        \Log::info('Command output', ['output' => $output]);
+            if (!$installWine->isSuccessful()) {
+                Log::error('Failed to install Wine', ['error' => $installWine->getErrorOutput()]);
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Wine installation failed',
+                    'details' => $installWine->getErrorOutput()
+                ], 500);
+            }
+
+            Log::info('Wine installed successfully.');
+        } else {
+            Log::info('Wine is already installed.');
+        }
+
+        Log::info('Starting audio download', ['url' => $videoUrl]);
+
+        // Construct the shell command using wine
+        $command = "wine \"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputDir}/%(title)s.%(ext)s\" \"{$videoUrl}\"";
+
+        // Execute command and capture output
+        $process = Process::fromShellCommandline($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            Log::error('Download failed', ['error' => $process->getErrorOutput()]);
+            return response()->json([
+                'success' => false,
+                'error' => 'Download failed',
+                'details' => $process->getErrorOutput()
+            ], 500);
+        }
+
+        Log::info('Command output', ['output' => $process->getOutput()]);
 
         // Find the most recently modified MP3 file
         $files = glob($outputDir . '/*.mp3');
@@ -40,7 +76,7 @@ class MusicController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'No MP3 file found',
-                'details' => $output
+                'details' => $process->getOutput()
             ], 500);
         }
 
@@ -53,5 +89,4 @@ class MusicController extends Controller
 
         return response()->download($latestFile)->deleteFileAfterSend(true);
     }
-
 }
