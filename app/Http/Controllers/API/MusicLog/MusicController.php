@@ -7,232 +7,106 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Symfony\Component\Process\Exception\ProcessFailedException;
-use Illuminate\Support\Str;
 
 class MusicController extends Controller
 {
     public function downloadMP3(Request $request)
-    {
-        // Validate that 'url' is provided
-        $request->validate([
-            'url' => 'required|url'
-        ]);
+{
+    $debugInfo = []; // Array to store debug data
 
-        $outputDir = storage_path('app/public/downloads');
-        $videoUrl = $request->input('url');
+    $debugInfo['request_url'] = $request->input('url');
 
-        // Ensure the output directory exists with proper permissions
-        if (!file_exists($outputDir)) {
-            mkdir($outputDir, 0755, true);
-        }
+    // Validate the request
+    $request->validate([
+        'url' => 'required|url'
+    ]);
 
-        // Generate a unique filename to avoid conflicts
-        $uniqueId = Str::random(8);
-        $outputTemplate = "{$outputDir}/{$uniqueId}_%(title)s.%(ext)s";
-        
-        // Check if we're in a Linux environment
-        $isLinux = (PHP_OS_FAMILY === 'Linux');
-        
-        Log::info('Starting audio download', ['url' => $videoUrl, 'environment' => PHP_OS_FAMILY]);
-        
-        if ($isLinux) {
-            // On Linux, we'll use the Linux version of yt-dlp directly
-            $ytDlpPath = base_path('bin/yt-dlp');
-            
-            // Make sure yt-dlp exists and is executable
-            if (!file_exists($ytDlpPath)) {
-                // If yt-dlp doesn't exist, download it
-                Log::info('Downloading yt-dlp for Linux...');
-                
-                // Ensure the bin directory exists
-                $binDir = base_path('bin');
-                if (!file_exists($binDir)) {
-                    mkdir($binDir, 0755, true);
-                }
-                
-                $downloadProcess = Process::fromShellCommandline("curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o {$ytDlpPath}");
-                $downloadProcess->setTimeout(120); // 2 minutes timeout for download
-                $downloadProcess->run();
-                
-                if (!$downloadProcess->isSuccessful()) {
-                    Log::error('Failed to download yt-dlp', ['error' => $downloadProcess->getErrorOutput()]);
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'Failed to download yt-dlp',
-                        'details' => $downloadProcess->getErrorOutput()
-                    ], 500);
-                }
-                
-                Log::info('yt-dlp downloaded successfully');
-            }
-            
-            // Explicitly set execute permissions
-            Log::info('Setting execute permissions on yt-dlp');
-            $chmodProcess = Process::fromShellCommandline("chmod +x {$ytDlpPath}");
-            $chmodProcess->run();
-            
-            if (!$chmodProcess->isSuccessful()) {
-                Log::error('Failed to set execute permissions on yt-dlp', ['error' => $chmodProcess->getErrorOutput()]);
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Failed to set permissions on yt-dlp',
-                    'details' => $chmodProcess->getErrorOutput()
-                ], 500);
-            }
-            
-            // Verify file exists and is executable
-            if (!file_exists($ytDlpPath) || !is_executable($ytDlpPath)) {
-                Log::error('yt-dlp is not executable', [
-                    'file_exists' => file_exists($ytDlpPath),
-                    'is_executable' => is_executable($ytDlpPath),
-                    'file_permissions' => fileperms($ytDlpPath)
-                ]);
-                
-                // Try PHP's chmod function directly
-                chmod($ytDlpPath, 0755);
-                
-                if (!is_executable($ytDlpPath)) {
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'yt-dlp is not executable',
-                        'details' => 'Failed to set executable permissions'
-                    ], 500);
-                }
-            }
-            
-            // Construct the command for Linux
-            $command = "\"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputTemplate}\" \"{$videoUrl}\"";
-        } else {
-            // Windows path (kept for local development)
-            $ytDlpPath = base_path('bin/yt-dlp.exe');
-            
-            // Check if Wine is installed
-            $checkWine = Process::fromShellCommandline('which wine');
-            $checkWine->setTimeout(60);
-            $checkWine->run();
-            
-            if (!$checkWine->isSuccessful() || empty(trim($checkWine->getOutput()))) {
-                Log::info('Wine is not installed. Attempting to install...');
-                
-                $installWine = Process::fromShellCommandline('apt-get update && apt-get install -y wine');
-                $installWine->setTimeout(300); // Give it more time
-                $installWine->run();
-                
-                if (!$installWine->isSuccessful()) {
-                    Log::error('Failed to install Wine', ['error' => $installWine->getErrorOutput()]);
-                    return response()->json([
-                        'success' => false,
-                        'error' => 'Wine installation failed',
-                        'details' => $installWine->getErrorOutput()
-                    ], 500);
-                }
-                
-                Log::info('Wine installed successfully.');
-            } else {
-                Log::info('Wine is already installed.');
-            }
-            
-            // Construct the command using wine
-            $command = "wine \"{$ytDlpPath}\" -x --audio-format mp3 -o \"{$outputTemplate}\" \"{$videoUrl}\"";
-        }
+    $ytDlpPath = base_path('bin/yt-dlp.exe'); 
+    $outputDir = storage_path('app/public/downloads');
+    $videoUrl = $request->input('url');
 
-        // Execute command with increased timeout
-        Log::info('Executing command', ['command' => $command]);
-        $process = Process::fromShellCommandline($command);
-        $process->setTimeout(300); // 5 minutes timeout
-        $process->run();
+    $debugInfo['yt_dlp_path'] = $ytDlpPath;
+    $debugInfo['output_directory'] = $outputDir;
 
-        if (!$process->isSuccessful()) {
-            Log::error('Download failed', [
-                'error' => $process->getErrorOutput(),
-                'command' => $command
-            ]);
-            return response()->json([
-                'success' => false,
-                'error' => 'Download failed',
-                'details' => $process->getErrorOutput()
-            ], 500);
-        }
-
-        Log::info('Command output', ['output' => $process->getOutput()]);
-
-        // Find the most recently modified MP3 file with our unique ID
-        $files = glob($outputDir . '/' . $uniqueId . '_*.mp3');
-        if (empty($files)) {
-            return response()->json([
-                'success' => false,
-                'error' => 'No MP3 file found',
-                'details' => $process->getOutput(),
-                'search_pattern' => $outputDir . '/' . $uniqueId . '_*.mp3'
-            ], 500);
-        }
-
-        // Sort files by modification time, latest first
-        usort($files, function ($a, $b) {
-            return filemtime($b) - filemtime($a);
-        });
-
-        $latestFile = $files[0]; // Get the most recent file
-        $fileName = basename($latestFile);
-
-        return response()->download($latestFile, $fileName)->deleteFileAfterSend(true);
+    // Ensure output directory exists
+    if (!file_exists($outputDir)) {
+        mkdir($outputDir, 0755, true);
+        $debugInfo['directory_created'] = true;
+    } else {
+        $debugInfo['directory_exists'] = true;
     }
 
-    public function validateUrl(Request $request)
-{
-    $request->validate(['url' => 'required|url']);
-    return response()->json(['success' => true, 'message' => 'URL is valid']);
-}
+    // Check if yt-dlp is executable
+    if (!is_executable($ytDlpPath)) {
+        $debugInfo['yt_dlp_executable'] = false;
+        return response()->json([
+            'success' => false,
+            'error' => 'yt-dlp is not executable',
+            'debug' => $debugInfo
+        ], 500);
+    } else {
+        $debugInfo['yt_dlp_executable'] = true;
+    }
 
-public function checkDirectory()
-{
-    $outputDir = storage_path('app/public/downloads');
-    return response()->json([
-        'exists' => file_exists($outputDir),
-        'writable' => is_writable($outputDir),
-        'path' => $outputDir
-    ]);
-}
+    // Check if Wine is installed
+    $checkWine = Process::fromShellCommandline('which wine');
+    $checkWine->run();
+    
+    $debugInfo['wine_check_output'] = trim($checkWine->getOutput());
+    $debugInfo['wine_check_error'] = trim($checkWine->getErrorOutput());
 
-public function checkYtDlp()
-{
-    $ytDlpPath = base_path('bin/yt-dlp');
-    return response()->json([
-        'exists' => file_exists($ytDlpPath),
-        'executable' => is_executable($ytDlpPath),
-        'permissions' => fileperms($ytDlpPath)
-    ]);
-}
+    if (!$checkWine->isSuccessful() || empty(trim($checkWine->getOutput()))) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Wine is not installed',
+            'debug' => $debugInfo
+        ], 500);
+    }
 
-public function checkPermissions()
-{
-    $ytDlpPath = base_path('bin/yt-dlp');
-    chmod($ytDlpPath, 0755);
-    return response()->json([
-        'executable_after_chmod' => is_executable($ytDlpPath)
-    ]);
-}
+    // Construct the yt-dlp command
+    $command = "wine \"$ytDlpPath\" -x --audio-format mp3 -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
+    $debugInfo['command'] = $command;
 
-public function checkWine()
-{
-    $process = Process::fromShellCommandline('which wine');
+    // Execute command
+    $process = Process::fromShellCommandline($command);
     $process->run();
+
+    // Capture command output
+    $debugInfo['yt_dlp_stdout'] = trim($process->getOutput());
+    $debugInfo['yt_dlp_stderr'] = trim($process->getErrorOutput());
+
+    if (!$process->isSuccessful()) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Download failed',
+            'debug' => $debugInfo
+        ], 500);
+    }
+
+    // Find the latest MP3 file
+    $files = glob($outputDir . '/*.mp3');
+    $debugInfo['mp3_files_found'] = $files ? count($files) : 0;
+
+    if (!$files) {
+        return response()->json([
+            'success' => false,
+            'error' => 'No MP3 file found',
+            'debug' => $debugInfo
+        ], 500);
+    }
+
+    usort($files, fn($a, $b) => filemtime($b) - filemtime($a));
+    $latestFile = $files[0];
+
+    $debugInfo['latest_file'] = $latestFile;
+
     return response()->json([
-        'success' => $process->isSuccessful(),
-        'output' => trim($process->getOutput()),
-        'error' => $process->getErrorOutput()
+        'success' => true,
+        'message' => 'Download successful',
+        'file_url' => asset('storage/downloads/' . basename($latestFile)),
+        'debug' => $debugInfo
     ]);
 }
 
-public function testCommand()
-{
-    $process = Process::fromShellCommandline('echo "Test Command Executed"');
-    $process->run();
-    return response()->json([
-        'success' => $process->isSuccessful(),
-        'output' => trim($process->getOutput()),
-        'error' => $process->getErrorOutput()
-    ]);
-}
 
 }
