@@ -183,10 +183,16 @@ class MusicController extends Controller
             'debug' => $debugInfo
         ], 500);
     }
+    
+    $userAgents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+    ];
 
+    $randomUserAgent = $userAgents[array_rand($userAgents)];
+    
     // Construct the yt-dlp command with path to FFmpeg
-    $command = "\"$ytDlpPath\" -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
-    $debugInfo['command'] = $command;
+    $command = "\"$ytDlpPath\" -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" --user-agent \"$randomUserAgent\" -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";    $debugInfo['command'] = $command;
 
     // Execute command
     $process = Process::fromShellCommandline($command);
