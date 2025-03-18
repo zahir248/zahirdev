@@ -40,12 +40,28 @@ class MusicController extends Controller
         }
     }
 
-    // Install yt-dlp if needed
+    // Install yt-dlp standalone binary if needed
     if (!file_exists($ytDlpPath) || !is_executable($ytDlpPath)) {
-        $debugInfo['yt_dlp_status'] = 'Not found or not executable - attempting to install';
+        $debugInfo['yt_dlp_status'] = 'Not found or not executable - attempting to install standalone binary';
+        
+        // Get architecture
+        $archProcess = Process::fromShellCommandline("uname -m");
+        $archProcess->run();
+        $arch = trim($archProcess->getOutput());
+        
+        // Determine the appropriate URL based on architecture
+        $ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+        if ($arch == "x86_64") {
+            $ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux";
+        } elseif ($arch == "aarch64") {
+            $ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux_aarch64";
+        }
+        
+        $debugInfo['yt_dlp_arch'] = $arch;
+        $debugInfo['yt_dlp_url'] = $ytDlpUrl;
         
         $installProcess = Process::fromShellCommandline(
-            "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o \"$ytDlpPath\" && chmod +x \"$ytDlpPath\""
+            "curl -L $ytDlpUrl -o \"$ytDlpPath\" && chmod +x \"$ytDlpPath\""
         );
         $installProcess->setTimeout(60);
         $installProcess->run();
@@ -56,7 +72,7 @@ class MusicController extends Controller
         if (!$installProcess->isSuccessful() || !file_exists($ytDlpPath)) {
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to install yt-dlp',
+                'error' => 'Failed to install yt-dlp standalone binary',
                 'debug' => $debugInfo
             ], 500);
         }
@@ -66,7 +82,7 @@ class MusicController extends Controller
         $debugInfo['yt_dlp_status'] = 'Already installed';
     }
 
-    // Install FFmpeg if needed
+    // Install FFmpeg if needed (same as before)
     if (!file_exists($ffmpegPath) || !is_executable($ffmpegPath)) {
         $debugInfo['ffmpeg_status'] = 'Not found or not executable - attempting to install';
         
@@ -152,6 +168,20 @@ class MusicController extends Controller
         $cleanupProcess->run();
     } else {
         $debugInfo['ffmpeg_status'] = 'Already installed';
+    }
+
+    // Test if yt-dlp runs successfully
+    $testProcess = Process::fromShellCommandline("\"$ytDlpPath\" --version");
+    $testProcess->run();
+    $debugInfo['yt_dlp_test_output'] = trim($testProcess->getOutput());
+    $debugInfo['yt_dlp_test_error'] = trim($testProcess->getErrorOutput());
+    
+    if (!$testProcess->isSuccessful()) {
+        return response()->json([
+            'success' => false,
+            'error' => 'yt-dlp binary test failed',
+            'debug' => $debugInfo
+        ], 500);
     }
 
     // Construct the yt-dlp command with path to FFmpeg
