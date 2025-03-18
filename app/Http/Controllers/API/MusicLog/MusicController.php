@@ -32,6 +32,20 @@ class MusicController extends Controller
     $debugInfo['yt_dlp_path'] = $ytDlpPath;
     $debugInfo['ffmpeg_path'] = $ffmpegPath;
 
+    $cookiesPath = "/app/cookies.txt";
+    $cookiesDir = dirname($cookiesPath);
+
+    // Ensure the cookies directory exists and is writable
+    if (!file_exists($cookiesDir)) {
+        mkdir($cookiesDir, 0755, true);
+    }
+
+    // Make sure the cookies file is writable
+    if (!file_exists($cookiesPath)) {
+        touch($cookiesPath);
+    }
+    chmod($cookiesPath, 0666);
+
     // Ensure directories exist
     foreach ([$outputDir, $toolsDir] as $dir) {
         if (!file_exists($dir)) {
@@ -184,8 +198,10 @@ class MusicController extends Controller
         ], 500);
     }
 
+    $cookiesPath = storage_path('app/cookies.txt');
+
     // Construct the yt-dlp command with path to FFmpeg and custom cookies file
-    $command = "\"$ytDlpPath\" -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" --cookies \"/app/cookies.txt\" -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
+    $command = "\"$ytDlpPath\" --no-cache-dir -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" --cookies \"$cookiesPath\" -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
 
     $debugInfo['command'] = $command;
 
