@@ -23,12 +23,14 @@ class MusicController extends Controller
     $outputDir = storage_path('app/public/downloads');
     $videoUrl = $request->input('url');
     
-    // Store yt-dlp in the storage directory instead of bin
+    // Store tools in the storage directory
     $toolsDir = storage_path('app/tools');
     $ytDlpPath = $toolsDir . '/yt-dlp';
+    $ffmpegPath = $toolsDir . '/ffmpeg';
 
     $debugInfo['output_directory'] = $outputDir;
     $debugInfo['yt_dlp_path'] = $ytDlpPath;
+    $debugInfo['ffmpeg_path'] = $ffmpegPath;
 
     // Ensure directories exist
     foreach ([$outputDir, $toolsDir] as $dir) {
@@ -38,19 +40,18 @@ class MusicController extends Controller
         }
     }
 
-    // Check if yt-dlp exists and is executable
+    // Install yt-dlp if needed
     if (!file_exists($ytDlpPath) || !is_executable($ytDlpPath)) {
         $debugInfo['yt_dlp_status'] = 'Not found or not executable - attempting to install';
         
-        // Download yt-dlp binary
         $installProcess = Process::fromShellCommandline(
             "curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o \"$ytDlpPath\" && chmod +x \"$ytDlpPath\""
         );
-        $installProcess->setTimeout(60); // Allow time for download
+        $installProcess->setTimeout(60);
         $installProcess->run();
         
-        $debugInfo['install_stdout'] = trim($installProcess->getOutput());
-        $debugInfo['install_stderr'] = trim($installProcess->getErrorOutput());
+        $debugInfo['yt_dlp_install_stdout'] = trim($installProcess->getOutput());
+        $debugInfo['yt_dlp_install_stderr'] = trim($installProcess->getErrorOutput());
         
         if (!$installProcess->isSuccessful() || !file_exists($ytDlpPath)) {
             return response()->json([
@@ -65,21 +66,96 @@ class MusicController extends Controller
         $debugInfo['yt_dlp_status'] = 'Already installed';
     }
 
-    // Check for FFmpeg
-    $checkFfmpeg = Process::fromShellCommandline('which ffmpeg');
-    $checkFfmpeg->run();
-    $debugInfo['ffmpeg_check'] = trim($checkFfmpeg->getOutput());
-    
-    if (!$checkFfmpeg->isSuccessful()) {
-        return response()->json([
-            'success' => false,
-            'error' => 'FFmpeg is required but not installed',
-            'debug' => $debugInfo
-        ], 500);
+    // Install FFmpeg if needed
+    if (!file_exists($ffmpegPath) || !is_executable($ffmpegPath)) {
+        $debugInfo['ffmpeg_status'] = 'Not found or not executable - attempting to install';
+        
+        // Download FFmpeg (static build for Linux)
+        $ffmpegTempDir = storage_path('app/temp');
+        if (!file_exists($ffmpegTempDir)) {
+            mkdir($ffmpegTempDir, 0755, true);
+        }
+        
+        $ffmpegArchive = $ffmpegTempDir . '/ffmpeg.tar.xz';
+        
+        // Download FFmpeg static build
+        $downloadProcess = Process::fromShellCommandline(
+            "curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o \"$ffmpegArchive\""
+        );
+        $downloadProcess->setTimeout(120); // Allow time for download
+        $downloadProcess->run();
+        
+        $debugInfo['ffmpeg_download_stdout'] = trim($downloadProcess->getOutput());
+        $debugInfo['ffmpeg_download_stderr'] = trim($downloadProcess->getErrorOutput());
+        
+        if (!$downloadProcess->isSuccessful() || !file_exists($ffmpegArchive)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to download FFmpeg',
+                'debug' => $debugInfo
+            ], 500);
+        }
+        
+        // Extract FFmpeg
+        $extractProcess = Process::fromShellCommandline(
+            "tar -xf \"$ffmpegArchive\" -C \"$ffmpegTempDir\""
+        );
+        $extractProcess->setTimeout(60);
+        $extractProcess->run();
+        
+        $debugInfo['ffmpeg_extract_stdout'] = trim($extractProcess->getOutput());
+        $debugInfo['ffmpeg_extract_stderr'] = trim($extractProcess->getErrorOutput());
+        
+        if (!$extractProcess->isSuccessful()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to extract FFmpeg',
+                'debug' => $debugInfo
+            ], 500);
+        }
+        
+        // Find the extracted ffmpeg binary
+        $findFfmpegProcess = Process::fromShellCommandline(
+            "find \"$ffmpegTempDir\" -name ffmpeg -type f"
+        );
+        $findFfmpegProcess->run();
+        $foundFfmpeg = trim($findFfmpegProcess->getOutput());
+        
+        if (empty($foundFfmpeg)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to locate FFmpeg binary',
+                'debug' => $debugInfo
+            ], 500);
+        }
+        
+        // Copy FFmpeg to tools directory
+        $copyProcess = Process::fromShellCommandline(
+            "cp \"$foundFfmpeg\" \"$ffmpegPath\" && chmod +x \"$ffmpegPath\""
+        );
+        $copyProcess->run();
+        
+        if (!$copyProcess->isSuccessful() || !file_exists($ffmpegPath)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to install FFmpeg',
+                'debug' => $debugInfo
+            ], 500);
+        }
+        
+        $debugInfo['ffmpeg_installed'] = true;
+        
+        // Clean up
+        $cleanupProcess = Process::fromShellCommandline(
+            "rm -rf \"$ffmpegTempDir\""
+        );
+        $cleanupProcess->run();
+    } else {
+        $debugInfo['ffmpeg_status'] = 'Already installed';
     }
 
-    // Construct the yt-dlp command
-    $command = "\"$ytDlpPath\" -x --audio-format mp3 -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
+    // Construct the yt-dlp command with path to FFmpeg
+    $command = "\"$ytDlpPath\" -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
     $debugInfo['command'] = $command;
 
     // Execute command
