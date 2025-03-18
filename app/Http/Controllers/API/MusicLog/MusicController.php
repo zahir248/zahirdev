@@ -177,4 +177,62 @@ class MusicController extends Controller
 
         return response()->download($latestFile, $fileName)->deleteFileAfterSend(true);
     }
+
+    public function validateUrl(Request $request)
+{
+    $request->validate(['url' => 'required|url']);
+    return response()->json(['success' => true, 'message' => 'URL is valid']);
+}
+
+public function checkDirectory()
+{
+    $outputDir = storage_path('app/public/downloads');
+    return response()->json([
+        'exists' => file_exists($outputDir),
+        'writable' => is_writable($outputDir),
+        'path' => $outputDir
+    ]);
+}
+
+public function checkYtDlp()
+{
+    $ytDlpPath = base_path('bin/yt-dlp');
+    return response()->json([
+        'exists' => file_exists($ytDlpPath),
+        'executable' => is_executable($ytDlpPath),
+        'permissions' => fileperms($ytDlpPath)
+    ]);
+}
+
+public function checkPermissions()
+{
+    $ytDlpPath = base_path('bin/yt-dlp');
+    chmod($ytDlpPath, 0755);
+    return response()->json([
+        'executable_after_chmod' => is_executable($ytDlpPath)
+    ]);
+}
+
+public function checkWine()
+{
+    $process = Process::fromShellCommandline('which wine');
+    $process->run();
+    return response()->json([
+        'success' => $process->isSuccessful(),
+        'output' => trim($process->getOutput()),
+        'error' => $process->getErrorOutput()
+    ]);
+}
+
+public function testCommand()
+{
+    $process = Process::fromShellCommandline('echo "Test Command Executed"');
+    $process->run();
+    return response()->json([
+        'success' => $process->isSuccessful(),
+        'output' => trim($process->getOutput()),
+        'error' => $process->getErrorOutput()
+    ]);
+}
+
 }

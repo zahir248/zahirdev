@@ -90,3 +90,12 @@ Route::post('/update-profile', [UserController::class, 'updateProfile']);
 
 Route::post('/download-mp3', [MusicController::class, 'downloadMP3']);
 
+Route::prefix('debug/music')->group(function () {
+    Route::get('validate-url', [MusicController::class, 'validateUrl']);
+    Route::get('check-dir', [MusicController::class, 'checkDirectory']);
+    Route::get('check-yt-dlp', [MusicController::class, 'checkYtDlp']);
+    Route::get('check-permissions', [MusicController::class, 'checkPermissions']);
+    Route::get('check-wine', [MusicController::class, 'checkWine']);
+    Route::get('test-command', [MusicController::class, 'testCommand']);
+});
+
