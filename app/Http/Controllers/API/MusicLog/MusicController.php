@@ -27,32 +27,50 @@ class MusicController extends Controller
     $toolsDir = storage_path('app/tools');
     $ytDlpPath = $toolsDir . '/yt-dlp';
     $ffmpegPath = $toolsDir . '/ffmpeg';
+    
+    // Create a cookies file in the storage directory where we have write access
+    $cookiesPath = storage_path('app/youtube_cookies.txt');
 
     $debugInfo['output_directory'] = $outputDir;
     $debugInfo['yt_dlp_path'] = $ytDlpPath;
     $debugInfo['ffmpeg_path'] = $ffmpegPath;
-
-    $cookiesPath = "/app/cookies.txt";
-    $cookiesDir = dirname($cookiesPath);
-
-    // Ensure the cookies directory exists and is writable
-    if (!file_exists($cookiesDir)) {
-        mkdir($cookiesDir, 0755, true);
-    }
-
-    // Make sure the cookies file is writable
-    if (!file_exists($cookiesPath)) {
-        touch($cookiesPath);
-    }
-    chmod($cookiesPath, 0666);
+    $debugInfo['cookies_path'] = $cookiesPath;
 
     // Ensure directories exist
-    foreach ([$outputDir, $toolsDir] as $dir) {
+    foreach ([$outputDir, $toolsDir, dirname($cookiesPath)] as $dir) {
         if (!file_exists($dir)) {
             mkdir($dir, 0755, true);
             $debugInfo[basename($dir).'_directory_created'] = true;
         }
     }
+
+    // Create cookies file with the YouTube authentication cookies
+    $cookiesContent = <<<EOT
+# Netscape HTTP Cookie File
+# http://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file!  Do not edit.
+
+.youtube.com	TRUE	/	FALSE	1774617761	HSID	A-M4AuV2cQhVR0lW8
+.youtube.com	TRUE	/	TRUE	1774617761	SSID	AyLl5ktEwnX6FyG5Q
+.youtube.com	TRUE	/	FALSE	1774617761	APISID	T8RWldUo02n38_mA/AQAuVHPrVWZvGlUsl
+.youtube.com	TRUE	/	TRUE	1774617761	SAPISID	Y3OMSpwZfALHR311/A62s3KmmFBanIXrOE
+.youtube.com	TRUE	/	TRUE	1774617761	__Secure-1PAPISID	Y3OMSpwZfALHR311/A62s3KmmFBanIXrOE
+.youtube.com	TRUE	/	TRUE	1774617761	__Secure-3PAPISID	Y3OMSpwZfALHR311/A62s3KmmFBanIXrOE
+.youtube.com	TRUE	/	TRUE	1766836995	LOGIN_INFO	AFmmF2swRgIhAKSTOhoLj9qNtEmVFGjb1G6lzx-Voez_NPqbgtmA58z0AiEA2ljt5iDMnJOZfGNNQEBNEWFoxin9fxgPLEWfJcWjK_0:QUQ3MjNmeDcyYzBSNzY2YlBIN3lwSWJFdFhpaUVxZjllVzZwMzliUE5fUVdKb2NNN29QX2gwcW52QW1VdHZlVUVnUjRwTWlWam5NVnpCb0VCNHJleXB4WnhxV1Y4QUVwS2tDejJ0d2hGOEVvRVlKdnlFOVdQM3F0NmZGSHBqZEd4RndXQnN0cHh2bFFPdDJTaGNPNzEyUy0ta3lYRGo0WGdR
+.youtube.com	TRUE	/	TRUE	1776833121	PREF	f6=40000000&tz=Asia.Kuala_Lumpur&f7=100
+.youtube.com	TRUE	/	FALSE	1774617761	SID	g.a000twjhWlDI1lVRDg_x7L5rLU_ioihsw4zrpJ9SFUeLONrqbtjQOXwDgi6r47CSyK0dmNZp7AACgYKAdISARASFQHGX2Mi-wY7DxJSMnApugn_G9XbdRoVAUF8yKpuH3PtabUB_ExCtgTdLlDE0076
+.youtube.com	TRUE	/	TRUE	1774617761	__Secure-1PSID	g.a000twjhWlDI1lVRDg_x7L5rLU_ioihsw4zrpJ9SFUeLONrqbtjQvB_vPcwh8kU_-Hz7C-kFewACgYKAfgSARASFQHGX2MiVrS230Jw77IpmYlCWLYmsBoVAUF8yKr2lk0bHoYjusNgFdyWPkdo0076
+.youtube.com	TRUE	/	TRUE	1774617761	__Secure-3PSID	g.a000twjhWlDI1lVRDg_x7L5rLU_ioihsw4zrpJ9SFUeLONrqbtjQLD1KxE9dlcElN8_d0za_IAACgYKAX4SARASFQHGX2MiHel5dBnTV6IGefu25M2U3hoVAUF8yKqGTNKcRfp2aifGJjyc4SrS0076
+.youtube.com	TRUE	/	FALSE	0	wide	1
+.youtube.com	TRUE	/	TRUE	1773808896	__Secure-1PSIDTS	sidts-CjEB7pHptTiUefMPExO3OpU7eXUpmXWcC60wS4ETxPIyhenFpxEKvC5mpmOmCyf3iL10EAA
+.youtube.com	TRUE	/	TRUE	1773808896	__Secure-3PSIDTS	sidts-CjEB7pHptTiUefMPExO3OpU7eXUpmXWcC60wS4ETxPIyhenFpxEKvC5mpmOmCyf3iL10EAA
+.youtube.com	TRUE	/	FALSE	1773809124	SIDCC	AKEyXzWUiuRYkOv4z5vlTyqNLVoM1YuvRA1_WI9pi6wnBL6zLW0IiJx4FYi-OePpV25_yrusiv0
+.youtube.com	TRUE	/	TRUE	1773809124	__Secure-1PSIDCC	AKEyXzUNqlxIJQ-eXIL4HghTyEqX6BSaFfJDNKHkidnHt91hbyzw5G6VYB_0hKZxicp0nqHJYJQ
+.youtube.com	TRUE	/	TRUE	1773809124	__Secure-3PSIDCC	AKEyXzUQG6C1pA8P-Dg0RAPgIvas80EGyOWzMfquJwBMRNB6fmWjtYnGwhLxHLAbU_9cwaZ8JLU
+EOT;
+
+    file_put_contents($cookiesPath, $cookiesContent);
+    $debugInfo['cookies_file_created'] = true;
 
     // Install yt-dlp standalone binary if needed
     if (!file_exists($ytDlpPath) || !is_executable($ytDlpPath)) {
@@ -201,7 +219,7 @@ class MusicController extends Controller
     $cookiesPath = storage_path('app/cookies.txt');
 
     // Construct the yt-dlp command with path to FFmpeg and custom cookies file
-    $command = "\"$ytDlpPath\" --no-cache-dir -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" --cookies \"$cookiesPath\" -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
+    $command = "\"$ytDlpPath\" --no-cache-dir -x --audio-format mp3 --ffmpeg-location \"$ffmpegPath\" --cookies \"$cookiesPath\" --no-cookies-save -o \"$outputDir/%(title)s.%(ext)s\" \"$videoUrl\"";
 
     $debugInfo['command'] = $command;
 
