@@ -223,12 +223,11 @@ class MusicController extends Controller
 
     $debugInfo['latest_file'] = $latestFile;
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Download successful',
-        'file_url' => asset('storage/downloads/' . basename($latestFile)),
-        'debug' => $debugInfo
+    // Return the MP3 file as a binary response
+    return response()->file($latestFile, [
+        'Content-Type' => 'audio/mpeg',
+        'Content-Disposition' => 'attachment; filename="' . basename($latestFile) . '"',
     ]);
-}
+    }
 
 }
