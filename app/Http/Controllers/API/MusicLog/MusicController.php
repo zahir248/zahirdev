@@ -22,24 +22,20 @@ class MusicController extends Controller
 
     $outputDir = storage_path('app/public/downloads');
     $videoUrl = $request->input('url');
-    $binDir = base_path('bin');
-    $ytDlpPath = $binDir . '/yt-dlp';
+    
+    // Store yt-dlp in the storage directory instead of bin
+    $toolsDir = storage_path('app/tools');
+    $ytDlpPath = $toolsDir . '/yt-dlp';
 
     $debugInfo['output_directory'] = $outputDir;
     $debugInfo['yt_dlp_path'] = $ytDlpPath;
 
-    // Ensure output directory exists
-    if (!file_exists($outputDir)) {
-        mkdir($outputDir, 0755, true);
-        $debugInfo['directory_created'] = true;
-    } else {
-        $debugInfo['directory_exists'] = true;
-    }
-
-    // Ensure bin directory exists
-    if (!file_exists($binDir)) {
-        mkdir($binDir, 0755, true);
-        $debugInfo['bin_directory_created'] = true;
+    // Ensure directories exist
+    foreach ([$outputDir, $toolsDir] as $dir) {
+        if (!file_exists($dir)) {
+            mkdir($dir, 0755, true);
+            $debugInfo[basename($dir).'_directory_created'] = true;
+        }
     }
 
     // Check if yt-dlp exists and is executable
@@ -56,7 +52,7 @@ class MusicController extends Controller
         $debugInfo['install_stdout'] = trim($installProcess->getOutput());
         $debugInfo['install_stderr'] = trim($installProcess->getErrorOutput());
         
-        if (!$installProcess->isSuccessful()) {
+        if (!$installProcess->isSuccessful() || !file_exists($ytDlpPath)) {
             return response()->json([
                 'success' => false,
                 'error' => 'Failed to install yt-dlp',
@@ -67,6 +63,19 @@ class MusicController extends Controller
         $debugInfo['yt_dlp_installed'] = true;
     } else {
         $debugInfo['yt_dlp_status'] = 'Already installed';
+    }
+
+    // Check for FFmpeg
+    $checkFfmpeg = Process::fromShellCommandline('which ffmpeg');
+    $checkFfmpeg->run();
+    $debugInfo['ffmpeg_check'] = trim($checkFfmpeg->getOutput());
+    
+    if (!$checkFfmpeg->isSuccessful()) {
+        return response()->json([
+            'success' => false,
+            'error' => 'FFmpeg is required but not installed',
+            'debug' => $debugInfo
+        ], 500);
     }
 
     // Construct the yt-dlp command
