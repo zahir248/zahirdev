@@ -21,6 +21,7 @@ class MusicController extends Controller
     ]);
 
     $outputDir = storage_path('app/public/downloads');
+    array_map('unlink', glob("$outputDir/*.mp3"));
     $videoUrl = $request->input('url');
     
     // Store tools in the storage directory
@@ -261,6 +262,9 @@ EOT;
     return response()->file($latestFile, [
         'Content-Type' => 'audio/mpeg',
         'Content-Disposition' => 'attachment; filename="' . basename($latestFile) . '"',
+        'Cache-Control' => 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0',
+        'Pragma' => 'no-cache',
+        'Expires' => '0',
     ]);
     }
 
